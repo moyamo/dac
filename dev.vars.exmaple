@@ -1,0 +1,5 @@
+PAYPAL_CLIENT_ID=blahblahblah
+PAYPAL_APP_SECRET=blahblahblah
+# Since the frontend and backend are on different origins,
+# this is used by the backend to CORS-allow the frontend.
+FRONTEND_URL=http://localhost:3000

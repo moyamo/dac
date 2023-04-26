@@ -2,6 +2,10 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Setup
+
+Copy `dev.vars.example` to `.dev.vars` and fill in the necessary information.
+
 ## Available Scripts
 
 In the project directory, you can run:
