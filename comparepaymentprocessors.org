@@ -21,19 +21,21 @@
 | Percentage  |         |               |         7.9 |       12.4 |           6.7 |
 #+TBLFM: @>>$4..@>>$6=vsum(@I..@II)::@>$4=@-1*100/20::@>$5=@-1*100/5::$4=20*$-2/100+$-1/100::$5=5*$-3/100+$-2/100::$6=100*$-4/100+$-3/100::@>$6=@-1$0
 
+* Paypal refund and small payout
+
+I realized that instead of paying out the payed amount plus bonus, it's better to
+refund the payed amount and payout the bonus. So the payout fee would be 20% * 2% = 0.4%
+
+|             | Fee (%) | Fee Fixed (c) | $20 example | $5 example | $ 100 example |
+|-------------+---------+---------------+-------------+------------+---------------|
+| Credit card |    4.40 |            30 |        1.18 |       0.52 |           4.7 |
+| Payout      |    0.40 |             0 |        0.08 |       0.02 |           0.4 |
+|-------------+---------+---------------+-------------+------------+---------------|
+| Total       |         |               |        1.26 |       0.54 |           5.1 |
+| Percentage  |         |               |         6.3 |       10.8 |           5.1 |
+#+TBLFM: @>>$4..@>>$6=vsum(@I..@II)::@>$4=@-1*100/20::@>$5=@-1*100/5::$4=20*$-2/100+$-1/100::$5=5*$-3/100+$-2/100::$6=100*$-4/100+$-3/100::@>$6=@-1$0
+
 * Conclusion
 
-** At $100
-
-There is very little difference, with paypal 1% more expensive.
-
-** At $20
-
-Stripe is not viable to use because fees are at 16%, (due to the monthly active
-user fee of $2 per user).
-
-Paypal is viable at $20 with 8% fees, but still expensive.
-
-** At $5
-
-Neither is viable, but paypal is cheaper.
+Paypal with refund and small payout dominates Stripe since there are no fixed
+payout fees or monthly active user fees. And is even feasible (Fees ~10%) at $5.
