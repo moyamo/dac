@@ -40,16 +40,19 @@ export default {
       const orderID = url.pathname.split("/")[2];
       const response = await capturePayment(orderID, env);
       console.log(JSON.stringify(response, null, 2))
+      const returnAddress = response.payment_source.paypal.email_address;
       const obj = Counter.fromName(env, "demoProject");
-      const objUrl = new URL("/counter", url.origin).href;
-      console.log("objUrl", objUrl)
-      obj.fetch(objUrl, {method: "POST"})
+      await obj.fetch(request.url, {method: "PUT", body: JSON.stringify({"returnAddress": returnAddress})})
       return new Response(JSON.stringify(response), {"headers": {...corsHeaders, "content-type": "application/json"}})
     } else if (request.method == "GET" && url.pathname === "/counter") {
       const obj = Counter.fromName(env, "demoProject");
-      const resp = await obj.fetch(request.url);
+      const resp = await obj.fetch(request.url, {method: "GET"});
       const count = await resp.text();
       return new Response(count, {"headers": corsHeaders})
+    } else if (url.pathname == "/refund") {
+      const obj = Counter.fromName(env, "demoProject");
+      const resp = await obj.fetch(request.url, {method: request.method});
+      return new Response(resp.body, {status: resp.status, headers: {...corsHeaders, ...resp.headers}})
     } else {
       return new Response(null, {headers: corsHeaders, status: "404", statusText: "Not Found"});
     }
@@ -61,6 +64,7 @@ export default {
 export class Counter {
   constructor(state, env) {
     this.state = state;
+    this.env = env;
   }
 
   static fromName(env: Env, name: string) {
@@ -72,18 +76,37 @@ export class Counter {
     // Durable Object storage is automatically cached in-memory, so reading the
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
-    let value = (await this.state.storage.get("value")) || 0;
-
-    switch (request.method) {
-      case "POST":
-        ++value;
-        break;
-      case "GET":
-        // Just serve the current value.
-        break;
-      default:
-        return new Response("Not found", { status: 404 });
+    let returnAddressList = await this.state.storage.get("returnAddressList") || {}
+    console.log(returnAddressList)
+    const path = new URL(request.url).pathname
+    const method = request.method
+    console.log("Counter", method, path)
+    if (path === "/counter" && method === "GET") {
+      return new Response(String(Object.keys(returnAddressList).length))
+    } else if (path.startsWith("/contract/") && path.split("/").length == 3 && method == "PUT") {
+      const orderId = path.split("/")[2];
+      const body = await request.json()
+      returnAddressList[orderId] = body.returnAddress
+      console.log(returnAddressList)
+      await this.state.storage.put("returnAddressList", returnAddressList)
+      return new Response()
+    } else if (path == "/refund" && method == "PUT") {
+      let refund = await this.state.storage.get("refund")
+      if (refund == null) {
+        refund = crypto.randomUUID()
+        const response = await payout(this.env, refund, Object.values(returnAddressList))
+        console.log(JSON.stringify(response))
+        this.state.storage.put("refund", refund)
+      }
+      return new Response(refund, )
+    } else if (path == "/refund" && method == "GET") {
+      const refund = await this.state.storage.get("refund")
+      if (refund != null) {
+        return new Response()
+      }
     }
+    return new Response("Not found", { status: 404 });
+
 
     // You do not have to worry about a concurrent request having modified the
     // value in storage because "input gates" will automatically protect against
@@ -146,6 +169,49 @@ async function capturePayment(orderId, env) {
   });
   const data = await response.json();
   return data;
+}
+
+function trace(b) {
+  console.log(b)
+  return b
+}
+
+// use the payout api to payout to users
+async function payout(env, batch_id, user_emails) {
+  const accessToken = await generateAccessToken(env);
+  const url = `${baseURL.sandbox}/v1/payments/payouts`;
+  const amount = "22.80" // 19 * 120%
+  const max_digit = 5; // at most 15000 payments in a single payout
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(trace({
+      "sender_batch_header": {
+        "sender_batch_id": batch_id,
+        "recipient_type": "EMAIL",
+        "email_subject": "DAC Demo Gratitude",
+        "email_message": "Sorry, we did not reach our funding goal we have returned you money with something extra for supporting us."
+      },
+      "items": user_emails.map((email, i) => ({
+        "amount": {
+          "value": amount,
+          "currency": "USD"
+        },
+        "sender_item_id": batch_id + String(i).padStart(max_digit, '0'),
+        "recipient_wallet": "PAYPAL",
+        "receiver": email
+      }))
+    }))
+  })
+  if (!response.ok) {
+    console.log("error")
+    console.log(await response.json())
+    throw new Error("Error from Paypal API " + response.status);
+  }
+  return await response.json()
 }
 
 // generate an access token using client id and app secret
