@@ -9,17 +9,17 @@
  */
 
 interface Env {
-  PAYPAL_CLIENT_ID: string,
-  PAYPAL_APP_SECRET: string,
-  FRONTEND_URL: string,
-  COUNTER: DurableObjectNamespace,
+  PAYPAL_CLIENT_ID: string;
+  PAYPAL_APP_SECRET: string;
+  FRONTEND_URL: string;
+  COUNTER: DurableObjectNamespace;
 }
 
 export default {
   async fetch(
-	request: Request,
-	env: Env,
-	ctx: ExecutionContext
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
   ): Promise<Response> {
     const corsHeaders = {
       "Access-Control-Allow-Origin": env.FRONTEND_URL,
@@ -27,34 +27,52 @@ export default {
       "Access-Control-Max-Age": "86400",
     };
     const url = new URL(request.url);
-    console.log(request.url, request.method, url.pathname)
+    console.log(request.url, request.method, url.pathname);
     if (request.method === "OPTIONS") {
-      return new Response(null, {"headers": corsHeaders})
+      return new Response(null, { headers: corsHeaders });
     } else if (request.method === "POST" && url.pathname === "/contract") {
-      console.log("got request")
+      console.log("got request");
       const order = await createOrder("19.00", env);
-      console.log("asked paypal for request")
-      console.log(order)
-      return new Response(JSON.stringify(order), {"headers": {...corsHeaders, "content-type": "application/json"}});
-    } else if (request.method == "PATCH" && url.pathname.startsWith("/contract/") && url.pathname.split("/").length == 3) {
+      console.log("asked paypal for request");
+      console.log(order);
+      return new Response(JSON.stringify(order), {
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    } else if (
+      request.method == "PATCH" &&
+      url.pathname.startsWith("/contract/") &&
+      url.pathname.split("/").length == 3
+    ) {
       const orderID = url.pathname.split("/")[2];
       const response = await capturePayment(orderID, env);
-      console.log(JSON.stringify(response, null, 2))
+      console.log(JSON.stringify(response, null, 2));
       const returnAddress = response.payment_source.paypal.email_address;
       const obj = Counter.fromName(env, "demoProject");
-      await obj.fetch(request.url, {method: "PUT", body: JSON.stringify({"returnAddress": returnAddress})})
-      return new Response(JSON.stringify(response), {"headers": {...corsHeaders, "content-type": "application/json"}})
+      await obj.fetch(request.url, {
+        method: "PUT",
+        body: JSON.stringify({ returnAddress }),
+      });
+      return new Response(JSON.stringify(response), {
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      });
     } else if (request.method == "GET" && url.pathname === "/counter") {
       const obj = Counter.fromName(env, "demoProject");
-      const resp = await obj.fetch(request.url, {method: "GET"});
+      const resp = await obj.fetch(request.url, { method: "GET" });
       const count = await resp.text();
-      return new Response(count, {"headers": corsHeaders})
+      return new Response(count, { headers: corsHeaders });
     } else if (url.pathname == "/refund") {
       const obj = Counter.fromName(env, "demoProject");
-      const resp = await obj.fetch(request.url, {method: request.method});
-      return new Response(resp.body, {status: resp.status, headers: {...corsHeaders, ...resp.headers}})
+      const resp = await obj.fetch(request.url, { method: request.method });
+      return new Response(resp.body, {
+        status: resp.status,
+        headers: { ...corsHeaders, ...resp.headers },
+      });
     } else {
-      return new Response(null, {headers: corsHeaders, status: "404", statusText: "Not Found"});
+      return new Response(null, {
+        headers: corsHeaders,
+        status: "404",
+        statusText: "Not Found",
+      });
     }
   },
 };
@@ -68,7 +86,7 @@ export class Counter {
   }
 
   static fromName(env: Env, name: string) {
-    return env.COUNTER.get(env.COUNTER.idFromName(name))
+    return env.COUNTER.get(env.COUNTER.idFromName(name));
   }
 
   // Handle HTTP requests from clients.
@@ -76,37 +94,45 @@ export class Counter {
     // Durable Object storage is automatically cached in-memory, so reading the
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
-    let returnAddressList = await this.state.storage.get("returnAddressList") || {}
-    console.log(returnAddressList)
-    const path = new URL(request.url).pathname
-    const method = request.method
-    console.log("Counter", method, path)
+    const returnAddressList =
+      (await this.state.storage.get("returnAddressList")) || {};
+    console.log(returnAddressList);
+    const path = new URL(request.url).pathname;
+    const method = request.method;
+    console.log("Counter", method, path);
     if (path === "/counter" && method === "GET") {
-      return new Response(String(Object.keys(returnAddressList).length))
-    } else if (path.startsWith("/contract/") && path.split("/").length == 3 && method == "PUT") {
+      return new Response(String(Object.keys(returnAddressList).length));
+    } else if (
+      path.startsWith("/contract/") &&
+      path.split("/").length == 3 &&
+      method == "PUT"
+    ) {
       const orderId = path.split("/")[2];
-      const body = await request.json()
-      returnAddressList[orderId] = body.returnAddress
-      console.log(returnAddressList)
-      await this.state.storage.put("returnAddressList", returnAddressList)
-      return new Response()
+      const body = await request.json();
+      returnAddressList[orderId] = body.returnAddress;
+      console.log(returnAddressList);
+      await this.state.storage.put("returnAddressList", returnAddressList);
+      return new Response();
     } else if (path == "/refund" && method == "PUT") {
-      let refund = await this.state.storage.get("refund")
+      let refund = await this.state.storage.get("refund");
       if (refund == null) {
-        refund = crypto.randomUUID()
-        const response = await payout(this.env, refund, Object.values(returnAddressList))
-        console.log(JSON.stringify(response))
-        this.state.storage.put("refund", refund)
+        refund = crypto.randomUUID();
+        const response = await payout(
+          this.env,
+          refund,
+          Object.values(returnAddressList)
+        );
+        console.log(JSON.stringify(response));
+        this.state.storage.put("refund", refund);
       }
-      return new Response(refund, )
+      return new Response(refund);
     } else if (path == "/refund" && method == "GET") {
-      const refund = await this.state.storage.get("refund")
+      const refund = await this.state.storage.get("refund");
       if (refund != null) {
-        return new Response()
+        return new Response();
       }
     }
     return new Response("Not found", { status: 404 });
-
 
     // You do not have to worry about a concurrent request having modified the
     // value in storage because "input gates" will automatically protect against
@@ -123,12 +149,12 @@ export class Counter {
 
 const baseURL = {
   sandbox: "https://api-m.sandbox.paypal.com",
-  production: "https://api-m.paypal.com"
+  production: "https://api-m.paypal.com",
 };
 
-//////////////////////
+/// ///////////////////
 // PayPal API helpers
-//////////////////////
+/// ///////////////////
 
 // use the orders api to create an order
 async function createOrder(amountUsd: string, env: Env) {
@@ -172,15 +198,15 @@ async function capturePayment(orderId, env) {
 }
 
 function trace(b) {
-  console.log(b)
-  return b
+  console.log(b);
+  return b;
 }
 
 // use the payout api to payout to users
 async function payout(env, batch_id, user_emails) {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v1/payments/payouts`;
-  const amount = "22.80" // 19 * 120%
+  const amount = "22.80"; // 19 * 120%
   const max_digit = 5; // at most 15000 payments in a single payout
   const response = await fetch(url, {
     method: "POST",
@@ -188,35 +214,38 @@ async function payout(env, batch_id, user_emails) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify(trace({
-      "sender_batch_header": {
-        "sender_batch_id": batch_id,
-        "recipient_type": "EMAIL",
-        "email_subject": "DAC Demo Gratitude",
-        "email_message": "Sorry, we did not reach our funding goal we have returned you money with something extra for supporting us."
-      },
-      "items": user_emails.map((email, i) => ({
-        "amount": {
-          "value": amount,
-          "currency": "USD"
+    body: JSON.stringify(
+      trace({
+        sender_batch_header: {
+          sender_batch_id: batch_id,
+          recipient_type: "EMAIL",
+          email_subject: "DAC Demo Gratitude",
+          email_message:
+            "Sorry, we did not reach our funding goal we have returned you money with something extra for supporting us.",
         },
-        "sender_item_id": batch_id + String(i).padStart(max_digit, '0'),
-        "recipient_wallet": "PAYPAL",
-        "receiver": email
-      }))
-    }))
-  })
+        items: user_emails.map((email, i) => ({
+          amount: {
+            value: amount,
+            currency: "USD",
+          },
+          sender_item_id: batch_id + String(i).padStart(max_digit, "0"),
+          recipient_wallet: "PAYPAL",
+          receiver: email,
+        })),
+      })
+    ),
+  });
   if (!response.ok) {
-    console.log("error")
-    console.log(await response.json())
+    console.log("error");
+    console.log(await response.json());
     throw new Error("Error from Paypal API " + response.status);
   }
-  return await response.json()
+  return await response.json();
 }
 
 // generate an access token using client id and app secret
 async function generateAccessToken(env: Env) {
-  const auth = btoa(env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET)
+  const auth = btoa(env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET);
   const response = await fetch(`${baseURL.sandbox}/v1/oauth2/token`, {
     method: "POST",
     body: "grant_type=client_credentials",
