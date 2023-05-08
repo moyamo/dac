@@ -15,7 +15,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types", "./node_modules/@cloudflare/workers-types"]
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/@cloudflare/workers-types"
+    ]
   },
   "include": ["src"]
 }
