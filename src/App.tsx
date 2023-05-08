@@ -3,8 +3,13 @@ import {
   PayPalButtons,
   FUNDING,
 } from "@paypal/react-paypal-js";
+import type {
+  CreateOrderData,
+  CreateOrderActions,
+} from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import "./App.css";
+import type { CreateOrderResponse } from "./worker";
 
 /* It seems like a client ID is unnecessary, let's just leave it out rather */
 const CLIENT_ID = "test";
@@ -20,7 +25,9 @@ function App() {
         setRefunded(true);
       }
     })();
-    return () => {};
+    return () => {
+      void null;
+    };
   }, [funded]);
   return (
     /* From [react-paypal-js documentation][1]. Context Provider - this
@@ -60,7 +67,7 @@ function App() {
                 method: "POST",
               });
               console.dir(response);
-              const responseJson = await response.json();
+              const responseJson: CreateOrderResponse = await response.json();
               console.dir("got response");
               console.dir(responseJson);
               return responseJson.id;
@@ -80,7 +87,6 @@ function App() {
               console.log("responseJson");
               console.dir(responseJson);
               setFunded(true);
-              return responseJson;
             }}
           />
         </>
@@ -96,7 +102,9 @@ function FundingProgressBar({ funded }: { funded: boolean }) {
       const count = await fetch(WORKER_URL + "/counter");
       setProgress(Number(await count.text()));
     })();
-    return () => {};
+    return () => {
+      void null;
+    };
   }, [funded]);
   return progress == -1 ? (
     <span>Loading...</span>

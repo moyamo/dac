@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 /**
  * Welcome to Cloudflare Workers! This is your first worker.
  *
@@ -19,7 +21,7 @@ export default {
   async fetch(
     request: Request,
     env: Env,
-    ctx: ExecutionContext // eslint-disable-line @typescript-eslint/no-unused-vars
+    _ctx: ExecutionContext
   ): Promise<Response> {
     const corsHeaders = {
       "Access-Control-Allow-Origin": env.FRONTEND_URL,
@@ -70,7 +72,7 @@ export default {
     } else {
       return new Response(null, {
         headers: corsHeaders,
-        status: "404",
+        status: 404,
         statusText: "Not Found",
       });
     }
@@ -102,8 +104,9 @@ export class Counter implements DurableObject {
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
     const returnAddressList =
-      (await this.state.storage.get<{ string: string }>("returnAddressList")) ||
-      {};
+      (await this.state.storage.get<{ [key: string]: string }>(
+        "returnAddressList"
+      )) || ({} as { [key: string]: string });
     console.log(returnAddressList);
     const path = new URL(request.url).pathname;
     const method = request.method;
@@ -122,7 +125,7 @@ export class Counter implements DurableObject {
       await this.state.storage.put("returnAddressList", returnAddressList);
       return new Response();
     } else if (path == "/refund" && method == "PUT") {
-      let refund = await this.state.storage.get("refund");
+      let refund = await this.state.storage.get<string>("refund");
       if (refund == null) {
         refund = crypto.randomUUID();
         const response = await payout(
@@ -185,7 +188,7 @@ async function createOrder(
       ],
     }),
   });
-  const data = await response.json();
+  const data = await response.json<CreateOrderResponse>();
   return data;
 }
 
@@ -207,7 +210,7 @@ async function capturePayment(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const data = await response.json();
+  const data = await response.json<CapturePaymentResponse>();
   return data;
 }
 
@@ -259,7 +262,9 @@ async function payout(env: Env, batch_id: string, user_emails: string[]) {
 
 // generate an access token using client id and app secret
 async function generateAccessToken(env: Env): Promise<string> {
-  const auth = btoa(env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET);
+  const auth = Buffer.from(
+    env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET
+  ).toString("base64");
   const response = await fetch(`${baseURL.sandbox}/v1/oauth2/token`, {
     method: "POST",
     body: "grant_type=client_credentials",

@@ -1,6 +1,7 @@
 name = "dac"
 main = "src/worker.ts"
 compatibility_date = "2023-04-26"
+compatibility_flags = [ "nodejs_compat" ]
 
 [durable_objects]
 bindings = [
