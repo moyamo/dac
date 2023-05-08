@@ -1,5 +1,5 @@
 name = "dac"
-main = "worker/index.ts"
+main = "src/worker.ts"
 compatibility_date = "2023-04-26"
 
 [durable_objects]
