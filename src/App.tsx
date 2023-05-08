@@ -4,7 +4,6 @@ import {
   FUNDING,
 } from "@paypal/react-paypal-js";
 import React from "react";
-import logo from "./logo.svg";
 import "./App.css";
 
 /* It seems like a client ID is unnecessary, let's just leave it out rather */
@@ -15,7 +14,7 @@ function App() {
   const [funded, setFunded] = React.useState(false);
   const [refunded, setRefunded] = React.useState(false);
   React.useEffect(() => {
-    (async () => {
+    void (async () => {
       const refund = await fetch(WORKER_URL + "/refund");
       if (refund.ok) {
         setRefunded(true);
@@ -35,8 +34,8 @@ function App() {
     <PayPalScriptProvider options={{ "client-id": CLIENT_ID }}>
       <h1>Dominant Assurance Contract Prototype</h1>
       <p>
-        This is a prototype of dominant assurance contracts using Paypal's API
-        with Cloudflare Pages.
+        This is a prototype of dominant assurance contracts using Paypal&apos;s
+        API with Cloudflare Pages.
       </p>
       {refunded ? (
         "Sorry, the project did not reach the goal. The money is been refunded"
@@ -49,8 +48,8 @@ function App() {
               FUNDING.PAYPAL
             }
             createOrder={async (
-              data /*: CreateOrderData */,
-              actions /*: CreateOrderActions */
+              data: CreateOrderData,
+              actions: CreateOrderActions
             ) => {
               console.log("created order");
               console.log("data");
@@ -93,7 +92,7 @@ function App() {
 function FundingProgressBar({ funded }: { funded: boolean }) {
   const [progress, setProgress] = React.useState(-1);
   React.useEffect(() => {
-    (async () => {
+    void (async () => {
       const count = await fetch(WORKER_URL + "/counter");
       setProgress(Number(await count.text()));
     })();
@@ -104,7 +103,7 @@ function FundingProgressBar({ funded }: { funded: boolean }) {
   ) : (
     <>
       <progress value={19 * progress} max={13 * 19} />
-      {"$" + 19 * progress + " / $" + 13 * 19 + " funded!"}
+      {`$${19 * progress} / $${13 * 19} funded!`}
       {funded ? " Thank you!" : null}
     </>
   );

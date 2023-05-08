@@ -19,7 +19,7 @@ export default {
   async fetch(
     request: Request,
     env: Env,
-    ctx: ExecutionContext
+    ctx: ExecutionContext // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<Response> {
     const corsHeaders = {
       "Access-Control-Allow-Origin": env.FRONTEND_URL,
@@ -77,10 +77,17 @@ export default {
   },
 };
 
+type PutContractBody = {
+  returnAddress: string;
+};
+
 // Durable Object
 
-export class Counter {
-  constructor(state, env) {
+export class Counter implements DurableObject {
+  state: DurableObjectState;
+  env: Env;
+
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
   }
@@ -90,12 +97,13 @@ export class Counter {
   }
 
   // Handle HTTP requests from clients.
-  async fetch(request) {
+  async fetch(request: Request) {
     // Durable Object storage is automatically cached in-memory, so reading the
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
     const returnAddressList =
-      (await this.state.storage.get("returnAddressList")) || {};
+      (await this.state.storage.get<{ string: string }>("returnAddressList")) ||
+      {};
     console.log(returnAddressList);
     const path = new URL(request.url).pathname;
     const method = request.method;
@@ -108,7 +116,7 @@ export class Counter {
       method == "PUT"
     ) {
       const orderId = path.split("/")[2];
-      const body = await request.json();
+      const body = await request.json<PutContractBody>();
       returnAddressList[orderId] = body.returnAddress;
       console.log(returnAddressList);
       await this.state.storage.put("returnAddressList", returnAddressList);
@@ -123,7 +131,7 @@ export class Counter {
           Object.values(returnAddressList)
         );
         console.log(JSON.stringify(response));
-        this.state.storage.put("refund", refund);
+        await this.state.storage.put("refund", refund);
       }
       return new Response(refund);
     } else if (path == "/refund" && method == "GET") {
@@ -133,14 +141,6 @@ export class Counter {
       }
     }
     return new Response("Not found", { status: 404 });
-
-    // You do not have to worry about a concurrent request having modified the
-    // value in storage because "input gates" will automatically protect against
-    // unwanted concurrency. So, read-modify-write is safe. For more details,
-    // refer to: https://blog.cloudflare.com/durable-objects-easy-fast-correct-choose-three/
-    await this.state.storage.put("value", value);
-
-    return new Response(value);
   }
 }
 
@@ -156,8 +156,15 @@ const baseURL = {
 // PayPal API helpers
 /// ///////////////////
 
+export type CreateOrderResponse = {
+  id: string;
+};
+
 // use the orders api to create an order
-async function createOrder(amountUsd: string, env: Env) {
+async function createOrder(
+  amountUsd: string,
+  env: Env
+): Promise<CreateOrderResponse> {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v2/checkout/orders`;
   const response = await fetch(url, {
@@ -182,8 +189,15 @@ async function createOrder(amountUsd: string, env: Env) {
   return data;
 }
 
+type CapturePaymentResponse = {
+  payment_source: { paypal: { email_address: string } };
+};
+
 // use the orders api to capture payment for an order
-async function capturePayment(orderId, env) {
+async function capturePayment(
+  orderId: string,
+  env: Env
+): Promise<CapturePaymentResponse> {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v2/checkout/orders/${orderId}/capture`;
   const response = await fetch(url, {
@@ -197,13 +211,13 @@ async function capturePayment(orderId, env) {
   return data;
 }
 
-function trace(b) {
+function trace<T>(b: T): T {
   console.log(b);
   return b;
 }
 
 // use the payout api to payout to users
-async function payout(env, batch_id, user_emails) {
+async function payout(env: Env, batch_id: string, user_emails: string[]) {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v1/payments/payouts`;
   const amount = "22.80"; // 19 * 120%
@@ -238,13 +252,13 @@ async function payout(env, batch_id, user_emails) {
   if (!response.ok) {
     console.log("error");
     console.log(await response.json());
-    throw new Error("Error from Paypal API " + response.status);
+    throw new Error(`Error from Paypal API ${response.status}`);
   }
   return await response.json();
 }
 
 // generate an access token using client id and app secret
-async function generateAccessToken(env: Env) {
+async function generateAccessToken(env: Env): Promise<string> {
   const auth = btoa(env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET);
   const response = await fetch(`${baseURL.sandbox}/v1/oauth2/token`, {
     method: "POST",
@@ -253,6 +267,6 @@ async function generateAccessToken(env: Env) {
       Authorization: `Basic ${auth}`,
     },
   });
-  const data = await response.json();
+  const data: { access_token: string } = await response.json();
   return data.access_token;
 }
