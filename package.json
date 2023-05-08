@@ -104,6 +104,10 @@
       "src/**/*.{js,jsx,ts,tsx}",
       "!src/**/*.d.ts"
     ],
+    "coverageReporters": [
+      "lcovonly"
+    ],
+    "coverageDirectory": ".",
     "setupFiles": [
       "react-app-polyfill/jsdom"
     ],
