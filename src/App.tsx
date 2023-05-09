@@ -6,6 +6,8 @@ import {
 import type {
   CreateOrderData,
   CreateOrderActions,
+  OnApproveData,
+  OnApproveActions,
 } from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import "./App.css";
@@ -13,7 +15,44 @@ import type { CreateOrderResponse } from "./worker";
 
 /* It seems like a client ID is unnecessary, let's just leave it out rather */
 const CLIENT_ID = "test";
-const WORKER_URL = "http://localhost:8787";
+export const WORKER_URL = "http://localhost:8787";
+
+export async function createOrder(
+  data: CreateOrderData,
+  actions: CreateOrderActions
+) {
+  console.log("created order");
+  console.log("data");
+  console.dir(data);
+  console.log("actions");
+  console.dir(actions);
+  const response = await fetch(WORKER_URL + "/contract", {
+    method: "POST",
+  });
+  console.dir(response);
+  const responseJson: CreateOrderResponse = await response.json();
+  console.dir("got response");
+  console.dir(responseJson);
+  return responseJson.id;
+}
+
+export function onApprove(setFunded: (funded: boolean) => void) {
+  return async (data: OnApproveData, actions: OnApproveActions) => {
+    console.log("order approved");
+    console.dir(data);
+    console.log("actions");
+    console.dir(actions);
+    const response = await fetch(WORKER_URL + "/contract/" + data.orderID, {
+      method: "PATCH",
+    });
+    console.log("got response");
+    console.dir(response);
+    const responseJson = await response.json();
+    console.log("responseJson");
+    console.dir(responseJson);
+    setFunded(true);
+  };
+}
 
 function App() {
   const [funded, setFunded] = React.useState(false);
@@ -25,9 +64,6 @@ function App() {
         setRefunded(true);
       }
     })();
-    return () => {
-      void null;
-    };
   }, [funded]);
   return (
     /* From [react-paypal-js documentation][1]. Context Provider - this
@@ -54,40 +90,8 @@ function App() {
               /* Don't allow weird sources, because I may Paypal the money back */
               FUNDING.PAYPAL
             }
-            createOrder={async (
-              data: CreateOrderData,
-              actions: CreateOrderActions
-            ) => {
-              console.log("created order");
-              console.log("data");
-              console.dir(data);
-              console.log("actions");
-              console.dir(actions);
-              const response = await fetch(WORKER_URL + "/contract", {
-                method: "POST",
-              });
-              console.dir(response);
-              const responseJson: CreateOrderResponse = await response.json();
-              console.dir("got response");
-              console.dir(responseJson);
-              return responseJson.id;
-            }}
-            onApprove={async (data, actions) => {
-              console.log("order approved");
-              console.dir(data);
-              console.log("actions");
-              console.dir(actions);
-              const response = await fetch(
-                WORKER_URL + "/contract/" + data.orderID,
-                { method: "PATCH" }
-              );
-              console.log("got response");
-              console.dir(response);
-              const responseJson = await response.json();
-              console.log("responseJson");
-              console.dir(responseJson);
-              setFunded(true);
-            }}
+            createOrder={createOrder}
+            onApprove={onApprove(setFunded)}
           />
         </>
       )}
@@ -95,22 +99,19 @@ function App() {
   );
 }
 
-function FundingProgressBar({ funded }: { funded: boolean }) {
+export function FundingProgressBar({ funded }: { funded: boolean }) {
   const [progress, setProgress] = React.useState(-1);
   React.useEffect(() => {
     void (async () => {
       const count = await fetch(WORKER_URL + "/counter");
       setProgress(Number(await count.text()));
     })();
-    return () => {
-      void null;
-    };
   }, [funded]);
   return progress == -1 ? (
     <span>Loading...</span>
   ) : (
     <>
-      <progress value={19 * progress} max={13 * 19} />
+      <progress role="progressbar" value={19 * progress} max={13 * 19} />
       {`$${19 * progress} / $${13 * 19} funded!`}
       {funded ? " Thank you!" : null}
     </>

@@ -93,6 +93,7 @@
     "eslint": "^8.39.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-react": "^7.32.2",
+    "msw": "^1.2.1",
     "prettier": "2.8.8",
     "wrangler": "^2.17.0"
   },
@@ -105,7 +106,7 @@
       "!src/**/*.d.ts"
     ],
     "coverageReporters": [
-      "lcovonly"
+      "lcovonly", "text"
     ],
     "coverageDirectory": ".",
     "setupFiles": [
