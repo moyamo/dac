@@ -20,8 +20,15 @@ const child_process = require("child_process");
 
 child_process.execSync("node scripts/miniflarejestbuild");
 
+// Needed to run miniflare test https://miniflare.dev/testing/jest
 process.env.NODE_OPTIONS = "--experimental-vm-modules";
 
 let argv = process.argv.slice(2);
+
+// Run against the right files
+argv.push("--testMatch");
+argv.push("**/*.reverse.spec.{js,jsx,ts,tsx}");
+
+process.env.REVERSE_SPEC_TEST_WHAT = "SPEC";
 
 jest.run(argv);

@@ -1,5 +1,7 @@
 import { Buffer } from "node:buffer";
 
+import * as Paypal from "./paypalTypes";
+
 /**
  * Welcome to Cloudflare Workers! This is your first worker.
  *
@@ -10,11 +12,13 @@ import { Buffer } from "node:buffer";
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-interface Env {
-  PAYPAL_CLIENT_ID: string;
-  PAYPAL_APP_SECRET: string;
-  FRONTEND_URL: string;
-  COUNTER: DurableObjectNamespace;
+// There doesn't seem to be any compile time check that these env vars will
+// correspond at runtime to what is declare here, so putting `?` is necessary.
+export interface Env {
+  PAYPAL_CLIENT_ID?: string;
+  PAYPAL_APP_SECRET?: string;
+  FRONTEND_URL?: string;
+  COUNTER?: DurableObjectNamespace;
 }
 
 export default {
@@ -23,11 +27,14 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<Response> {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": env.FRONTEND_URL,
-      "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS,PATCH",
-      "Access-Control-Max-Age": "86400",
-    };
+    const corsHeaders: { [h: string]: string } =
+      typeof env.FRONTEND_URL != "undefined"
+        ? {
+            "Access-Control-Allow-Origin": env.FRONTEND_URL,
+            "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS,PATCH",
+            "Access-Control-Max-Age": "86400",
+          }
+        : {};
     const url = new URL(request.url);
     console.log(request.url, request.method, url.pathname);
     if (request.method === "OPTIONS") {
@@ -95,7 +102,13 @@ export class Counter implements DurableObject {
   }
 
   static fromName(env: Env, name: string) {
-    return env.COUNTER.get(env.COUNTER.idFromName(name));
+    // Seems like a bug in c8 is preventing this line from appearing covered.
+    /* c8 ignore next */
+    if (typeof env.COUNTER != "undefined") {
+      return env.COUNTER.get(env.COUNTER.idFromName(name));
+    } else {
+      throw Error("Durable Object COUNTER not bound");
+    }
   }
 
   // Handle HTTP requests from clients.
@@ -150,7 +163,7 @@ export class Counter implements DurableObject {
 // For a fully working example, please see:
 // https://github.com/paypal-examples/docs-examples/tree/main/standard-integration
 
-const baseURL = {
+export const baseURL = {
   sandbox: "https://api-m.sandbox.paypal.com",
   production: "https://api-m.paypal.com",
 };
@@ -164,7 +177,7 @@ export type CreateOrderResponse = {
 };
 
 // use the orders api to create an order
-async function createOrder(
+export async function createOrder(
   amountUsd: string,
   env: Env
 ): Promise<CreateOrderResponse> {
@@ -192,15 +205,11 @@ async function createOrder(
   return data;
 }
 
-type CapturePaymentResponse = {
-  payment_source: { paypal: { email_address: string } };
-};
-
 // use the orders api to capture payment for an order
-async function capturePayment(
+export async function capturePayment(
   orderId: string,
   env: Env
-): Promise<CapturePaymentResponse> {
+): Promise<Paypal.CapturePaymentResponse> {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v2/checkout/orders/${orderId}/capture`;
   const response = await fetch(url, {
@@ -210,7 +219,7 @@ async function capturePayment(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const data = await response.json<CapturePaymentResponse>();
+  const data = await response.json<Paypal.CapturePaymentResponse>();
   return data;
 }
 
@@ -220,7 +229,11 @@ function trace<T>(b: T): T {
 }
 
 // use the payout api to payout to users
-async function payout(env: Env, batch_id: string, user_emails: string[]) {
+export async function payout(
+  env: Env,
+  batch_id: string,
+  user_emails: string[]
+) {
   const accessToken = await generateAccessToken(env);
   const url = `${baseURL.sandbox}/v1/payments/payouts`;
   const amount = "22.80"; // 19 * 120%
@@ -254,14 +267,20 @@ async function payout(env: Env, batch_id: string, user_emails: string[]) {
   });
   if (!response.ok) {
     console.log("error");
-    console.log(await response.json());
+    console.log(await response.text());
     throw new Error(`Error from Paypal API ${response.status}`);
   }
   return await response.json();
 }
 
 // generate an access token using client id and app secret
-async function generateAccessToken(env: Env): Promise<string> {
+export async function generateAccessToken(env: Env): Promise<string> {
+  if (
+    typeof env.PAYPAL_CLIENT_ID == "undefined" ||
+    typeof env.PAYPAL_APP_SECRET == "undefined"
+  ) {
+    throw new TypeError("PAYPAL_CLIENT_ID or PAYPAL_APP_SECRET is void");
+  }
   const auth = Buffer.from(
     env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET
   ).toString("base64");
@@ -272,6 +291,11 @@ async function generateAccessToken(env: Env): Promise<string> {
       Authorization: `Basic ${auth}`,
     },
   });
+  if (!response.ok) {
+    const e: { error: string; error_description: string } =
+      await response.json();
+    throw Error(`${e.error}: ${e.error_description}`);
+  }
   const data: { access_token: string } = await response.json();
   return data.access_token;
 }

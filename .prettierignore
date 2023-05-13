@@ -8,9 +8,13 @@
 # testing
 /coverage
 lcov.info
+/tmp
 
 # production
 /build
+
+# for testing cloudflare workers with miniflare
+/miniflarejestbuild
 
 # misc
 .DS_Store

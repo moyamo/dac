@@ -1,0 +1,19 @@
+{
+  "reporter": ["lcovonly", "text"],
+  "reports-dir": "./",
+  "all": true,
+  "include": ["src/**.{ts,tsx,js,jsx}", "miniflarejestbuild/**.js"],
+  "exclude": [
+    "coverage/**",
+    "packages/*/test{,s}/**",
+    "**/*.d.ts",
+    "test{,s}/**",
+    "test{,-*}.{js,cjs,mjs,ts,tsx,jsx}",
+    "**/*{.,-}{test,spec}.{js,cjs,mjs,ts,tsx,jsx}",
+    "**/__tests__/**",
+    "**/{ava,babel,nyc}.config.{js,cjs,mjs}",
+    "**/jest.config.{js,cjs,mjs,ts}",
+    "**/{karma,rollup,webpack}.config.js",
+    "**/.{eslint,mocha}rc.{js,cjs}"
+  ]
+}
