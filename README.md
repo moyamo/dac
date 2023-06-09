@@ -4,6 +4,10 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 ## Setup
 
+### Git hooks
+
+Run `npm run prepare` to setup git hooks.
+
 ### Dev
 
 Copy `dev.vars.example` to `.dev.vars` and fill in the necessary information.
