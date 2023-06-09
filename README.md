@@ -22,7 +22,21 @@ Copy `dev.vars.example` to `.dev.vars` and fill in the necessary information.
 
 ### Test
 
-Copy `example.env.test.local` to `env.test.local` and fill in the necessary information.
+Copy `example.env.test.local` to `env.test.local` and fill in the necessary
+information.
+
+## Deployment
+
+### Cloudflare Pages
+
+It should automatically deploy when pushing to the `main` branch. You will need
+to set the environment variable `REACT_APP_WORKER_URL` to the URL of the
+deployed worker during build time.
+
+### Cloudflare Workers
+
+Run `wranger publish`. Configure the environment variables in `dev.vars.example`
+manually on the cloudflare site.
 
 ## Available Scripts
 

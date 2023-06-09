@@ -15,7 +15,8 @@ import type { CreateOrderResponse } from "./worker";
 
 /* It seems like a client ID is unnecessary, let's just leave it out rather */
 const CLIENT_ID = "test";
-export const WORKER_URL = "http://localhost:8787";
+export const WORKER_URL =
+  process.env.REACT_APP_WORKER_URL || "http://localhost:8787";
 
 export async function createOrder(
   data: CreateOrderData,
