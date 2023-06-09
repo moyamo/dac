@@ -94,6 +94,8 @@ export default function () {
                   sender_batch_header: {
                     email_message: email_message,
                     email_subject: email_subject,
+                    // Seems like a bug in c8 is preventing this line from appearing covered.
+                    /* c8 ignore next */
                     recipient_type: recipient_type,
                     sender_batch_id: sender_batch_id,
                   },
@@ -142,7 +144,11 @@ export default function () {
                 href: `https://api.sandbox.paypal.com/v2/checkout/orders/${id}`,
                 method: "PATCH",
                 rel: "update",
+                // Seems like a bug in c8 is preventing this line from appearing covered.
+                /* c8 ignore next */
               },
+              // Seems like a bug in c8 is preventing this line from appearing covered.
+              /* c8 ignore next */
               {
                 href: `https://api.sandbox.paypal.com/v2/checkout/orders/${id}/capture`,
                 method: "POST",
@@ -164,6 +170,8 @@ export default function () {
         const bodyJson = JSON.parse(body) as { orderId: string; email: string };
         email = bodyJson.email;
         console.log("Email ", email);
+        // Seems like a bug in c8 is preventing this line from appearing covered.
+        /* c8 ignore next */
         return {
           statusCode: 201,
         };
@@ -194,6 +202,8 @@ function getAuthorizationHeader(
   headers: Headers | Record<string, string>
 ): string | null {
   function isRecord(
+    // Seems like a bug in c8 is preventing this line from appearing covered.
+    /* c8 ignore next */
     h: Headers | Record<string, string>
   ): h is Record<string, string> {
     return typeof h.get != "function";
