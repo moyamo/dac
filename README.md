@@ -8,6 +8,14 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 Run `npm run prepare` to setup git hooks.
 
+When running `git commit` if you get the error
+
+```
+[warn] Code style issues found in the above file. Forgot to run Prettier?
+```
+
+Run `prettier --write .` to reformat the files.
+
 ### Dev
 
 Copy `dev.vars.example` to `.dev.vars` and fill in the necessary information.
