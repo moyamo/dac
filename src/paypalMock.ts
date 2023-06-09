@@ -44,7 +44,8 @@ export default function () {
           error_description: "Client Authentication failed",
         }),
       };
-    }).persist();
+    })
+    .persist();
 
   paypalSandbox
     .intercept({ method: "POST", path: "/v1/payments/payouts" })
