@@ -195,7 +195,12 @@ describe("Authenticated API", () => {
     it("respond with CORS headers when configured", async () => {
       env.FRONTEND_URL = "http://localcors.com";
       const response = await worker.fetch(
-        new Request("http://localhost/", { method: "OPTIONS" }),
+        new Request("http://localhost/", {
+          method: "OPTIONS",
+          headers: {
+            Origin: env.FRONTEND_URL,
+          },
+        }),
         env,
         ctx
       );

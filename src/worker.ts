@@ -1,5 +1,7 @@
 import { Buffer } from "node:buffer";
 
+import * as Itty from "itty-router";
+
 import * as Paypal from "./paypalTypes";
 
 /**
@@ -27,32 +29,28 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<Response> {
-    const corsHeaders: { [h: string]: string } =
-      typeof env.FRONTEND_URL != "undefined"
-        ? {
-            "Access-Control-Allow-Origin": env.FRONTEND_URL,
-            "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS,PATCH",
-            "Access-Control-Max-Age": "86400",
-          }
-        : {};
-    const url = new URL(request.url);
-    console.log(request.url, request.method, url.pathname);
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
-    } else if (request.method === "POST" && url.pathname === "/contract") {
-      console.log("got request");
-      const order = await createOrder("19.00", env);
-      console.log("asked paypal for request");
-      console.log(order);
-      return new Response(JSON.stringify(order), {
-        headers: { ...corsHeaders, "content-type": "application/json" },
+    const router = Itty.Router();
+    const corsOrigin =
+      typeof env.FRONTEND_URL != "undefined" ? env.FRONTEND_URL : null;
+    let corsTransform;
+    if (corsOrigin) {
+      const { preflight, corsify } = Itty.createCors({
+        origins: [corsOrigin],
+        methods: ["GET", "HEAD", "POST", "OPTIONS", "PATCH"],
+        maxAge: 86400,
       });
-    } else if (
-      request.method == "PATCH" &&
-      url.pathname.startsWith("/contract/") &&
-      url.pathname.split("/").length == 3
-    ) {
-      const orderID = url.pathname.split("/")[2];
+      router.all("*", preflight);
+      corsTransform = corsify;
+    }
+
+    router.post("/contract", async () => {
+      const order = await createOrder("19.00", env);
+      console.log(order);
+      return order;
+    });
+
+    router.patch("/contract/:orderID", async (req) => {
+      const orderID: string = req.params.orderID;
       const response = await capturePayment(orderID, env);
       console.log(JSON.stringify(response, null, 2));
       const returnAddress = response.payment_source.paypal.email_address;
@@ -61,28 +59,29 @@ export default {
         method: "PUT",
         body: JSON.stringify({ returnAddress }),
       });
-      return new Response(JSON.stringify(response), {
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    } else if (request.method == "GET" && url.pathname === "/counter") {
+      return response;
+    });
+
+    router.get("/counter", async () => {
       const obj = Counter.fromName(env, "demoProject");
       const resp = await obj.fetch(request.url, { method: "GET" });
-      const count = await resp.text();
-      return new Response(count, { headers: corsHeaders });
-    } else if (url.pathname == "/refund") {
+      const count = await resp.json<number>();
+      return count;
+    });
+
+    router.all("/refund", async () => {
       const obj = Counter.fromName(env, "demoProject");
       const resp = await obj.fetch(request.url, { method: request.method });
-      return new Response(resp.body, {
-        status: resp.status,
-        headers: { ...corsHeaders, ...resp.headers },
-      });
-    } else {
-      return new Response(null, {
-        headers: corsHeaders,
-        status: 404,
-        statusText: "Not Found",
-      });
+      return resp;
+    });
+
+    router.all("*", () => Itty.error(404));
+
+    let response = router.handle(request).then(Itty.json).catch(Itty.error);
+    if (corsTransform) {
+      response = response.then(corsTransform);
     }
+    return response;
   },
 };
 
@@ -122,20 +121,23 @@ export class Counter implements DurableObject {
     const path = new URL(request.url).pathname;
     const method = request.method;
     console.log("Counter", method, path);
-    if (path === "/counter" && method === "GET") {
-      return new Response(String(Object.keys(returnAddressList).length));
-    } else if (
-      path.startsWith("/contract/") &&
-      path.split("/").length == 3 &&
-      method == "PUT"
-    ) {
-      const orderId = path.split("/")[2];
+
+    const router = Itty.Router();
+
+    router.get("/counter", () => {
+      return Object.keys(returnAddressList).length;
+    });
+
+    router.put("/contract/:orderId", async (req) => {
+      const orderId: string = req.params.orderId;
       const body = await request.json<PutContractBody>();
       returnAddressList[orderId] = body.returnAddress;
       console.log(returnAddressList);
       await this.state.storage.put("returnAddressList", returnAddressList);
-      return new Response();
-    } else if (path == "/refund" && method == "PUT") {
+      return "";
+    });
+
+    router.put("/refund", async () => {
       let refund = await this.state.storage.get<string>("refund");
       if (refund == null) {
         refund = crypto.randomUUID();
@@ -147,14 +149,19 @@ export class Counter implements DurableObject {
         console.log(JSON.stringify(response));
         await this.state.storage.put("refund", refund);
       }
-      return new Response(refund);
-    } else if (path == "/refund" && method == "GET") {
+      return refund;
+    });
+
+    router.get("/refund", async () => {
       const refund = await this.state.storage.get("refund");
       if (refund != null) {
-        return new Response();
+        return "";
       }
-    }
-    return new Response("Not found", { status: 404 });
+    });
+
+    router.all("*", () => Itty.error(404));
+
+    return router.handle(request).then(Itty.json).catch(Itty.error);
   }
 }
 
