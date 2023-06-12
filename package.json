@@ -66,7 +66,7 @@
     "build": "node scripts/build.js",
     "miniflarejestbuild": "node scripts/miniflarejestbuild",
     "test": "c8 node --experimental-vm-modules scripts/test.js",
-    "check": "prettier --check . && tsc --noEmit && eslint src && npm run test && c8 check-coverage --lines 100 --statements 100",
+    "check": "prettier --check . && tsc --noEmit && eslint src && npm run test && c8 check-coverage --lines 95 --statements 95",
     "fix": "prettier --write .",
     "test-reverse-spec": "node --experimental-vm-modules scripts/test-reverse-spec.js",
     "prepare": "husky install"

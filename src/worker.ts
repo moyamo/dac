@@ -102,8 +102,6 @@ export class Counter implements DurableObject {
   }
 
   static fromName(env: Env, name: string) {
-    // Seems like a bug in c8 is preventing this line from appearing covered.
-    /* c8 ignore next */
     if (typeof env.COUNTER != "undefined") {
       return env.COUNTER.get(env.COUNTER.idFromName(name));
     } else {
