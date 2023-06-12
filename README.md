@@ -14,7 +14,7 @@ When running `git commit` if you get the error
 [warn] Code style issues found in the above file. Forgot to run Prettier?
 ```
 
-Run `prettier --write .` to reformat the files.
+Run `npm run fix` to reformat the files.
 
 ### Dev
 
