@@ -34,9 +34,42 @@ export type CreateOrderResponse = {
   links: Link[];
 };
 
+export type amountWithCurrency = {
+  currency_code: "USD";
+  value: string;
+};
+
 // The response is actually much much bigger than this,
 // but we don't care about the other fields for now.
 // We can add them later.
 export type CapturePaymentResponse = {
+  id: string;
+  links: Link[];
+  payer: unknown;
   payment_source: { paypal: { email_address: string } };
+  purchase_units: Array<{
+    payments: {
+      captures: Array<{
+        amount: amountWithCurrency;
+        create_time: string;
+        final_capture: boolean;
+        id: string;
+        links: Link[];
+        seller_protection: {
+          dispute_categories: [string];
+          status: string;
+        };
+        seller_receivable_breakdown: {
+          gross_amount: amountWithCurrency;
+          net_amount: amountWithCurrency;
+          paypal_fee: amountWithCurrency;
+          status: string;
+          update_time: string;
+        };
+      }>;
+    };
+    reference_id: string;
+    shipping: unknown;
+  }>;
+  status: string;
 };

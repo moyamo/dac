@@ -311,7 +311,7 @@ test("checkout/orders", async () => {
 
 test("capture payment", async () => {
   const accessToken = await generateAccessToken();
-
+  const amountUsd = "5.00";
   // Create the order on the backend
   const response = await fetch(`${baseURL.sandbox}/v2/checkout/orders`, {
     method: "POST",
@@ -325,7 +325,7 @@ test("capture payment", async () => {
         {
           amount: {
             currency_code: "USD",
-            value: "5.00",
+            value: amountUsd,
           },
         },
       ],
@@ -389,6 +389,11 @@ test("capture payment", async () => {
   expect(body2.payment_source.paypal.email_address).toBe(
     PAYPAL_SANDBOX_EMAIL_1
   );
+  expect(body2.purchase_units).toHaveLength(1);
+  expect(body2.purchase_units[0].payments.captures).toHaveLength(1);
+  const capture = body2.purchase_units[0].payments.captures[0];
+  expect(capture.amount.currency_code).toBe("USD");
+  expect(capture.amount.value).toBe(amountUsd);
 }, 30000 /* ms. Increase timout it since we open chrome which could
  take a while. */);
 

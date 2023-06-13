@@ -16,6 +16,7 @@ import worker, {
   baseURL,
   capturePayment,
   Counter,
+  CounterResponse,
 } from "./worker";
 
 let env: Env;
@@ -108,46 +109,58 @@ describe("Authenticated API", () => {
       it("returns 0 when uninitialized", async () => {
         const counter = Counter.fromName(env, "test");
         const response = await counter.fetch("http://localhost/counter");
-        expect(await response.text()).toBe("0");
+        const responseJson = await response.json<CounterResponse>();
+        expect(responseJson.amount).toBe(0);
       });
     });
     describe("PUT /contract/:contract", () => {
-      it("increases the count of contracts", async () => {
+      it("add an $11 contract", async () => {
         const counter = Counter.fromName(env, "test");
 
         await counter.fetch("http://localhost/contract/contractOne", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_address: "email_address" }),
+          body: JSON.stringify({ email_address: "email_address", amount: 11 }),
         });
 
         const response2 = await counter.fetch("http://localhost/counter");
-        expect(await response2.text()).toBe("1");
+        const response2Json = await response2.json<CounterResponse>();
+        expect(response2Json.amount).toBe(11);
       });
-      it("to count to two", async () => {
+      it("add an $11 contract and $32 contract", async () => {
         const counter = Counter.fromName(env, "test");
 
         await counter.fetch("http://localhost/contract/contractOne", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_address: "exampleOne@example.com" }),
+          body: JSON.stringify({
+            email_address: "exampleOne@example.com",
+            amount: 11,
+          }),
         });
 
         await counter.fetch("http://localhost/contract/contractTwo", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_address: "exampleTwo@example.com" }),
+          body: JSON.stringify({
+            email_address: "exampleTwo@example.com",
+            amount: 32,
+          }),
         });
 
         const response3 = await counter.fetch("http://localhost/counter");
-        expect(await response3.text()).toBe("2");
+        const response3Json = await response3.json<CounterResponse>();
+        expect(response3Json.amount).toBe(43);
       });
       it("to be idempotent", async () => {
         const counter = Counter.fromName(env, "test");
 
         await counter.fetch("http://localhost/contract/contractOne", {
           method: "PUT",
-          body: JSON.stringify({ email_address: "exampleOne@example.com" }),
+          body: JSON.stringify({
+            email_address: "exampleOne@example.com",
+            amount: 11,
+          }),
           headers: {
             "Content-Type": "application/json",
           },
@@ -157,11 +170,15 @@ describe("Authenticated API", () => {
         await counter.fetch("http://localhost/contract/contractOne", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_address: "exampleTwo@example.com" }),
+          body: JSON.stringify({
+            email_address: "exampleTwo@example.com",
+            amount: 11,
+          }),
         });
 
         const response3 = await counter.fetch("http://localhost/counter");
-        expect(await response3.text()).toBe("1");
+        const response3Json = await response3.json<CounterResponse>();
+        expect(response3Json.amount).toBe(11);
       });
     });
     describe("/refund", () => {
@@ -219,9 +236,45 @@ describe("Authenticated API", () => {
       expect(response.headers.has("Access-Control-Allow-Origin")).toBeFalsy();
     });
     describe("POST /contract", () => {
-      it("works", async () => {
+      it("fails with incorrect body", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", { method: "POST" }),
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ notAmount: 1123.0 }),
+          }),
+          env,
+          ctx
+        );
+        expect(response.ok).toBeFalsy();
+      });
+      it("fails with amount greater than 500", async () => {
+        const response = await worker.fetch(
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 501 }),
+          }),
+          env,
+          ctx
+        );
+        expect(response.ok).toBeFalsy();
+      });
+      it("fails with amount less than 5", async () => {
+        const response = await worker.fetch(
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 4 }),
+          }),
+          env,
+          ctx
+        );
+        expect(response.ok).toBeFalsy();
+      });
+      it("works with correct body", async () => {
+        const response = await worker.fetch(
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 17.0 }),
+          }),
           env,
           ctx
         );
@@ -233,7 +286,10 @@ describe("Authenticated API", () => {
     describe("PATCH /contract/:contract_id", () => {
       it("works", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", { method: "POST" }),
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 17.0 }),
+          }),
           env,
           ctx
         );
@@ -257,11 +313,15 @@ describe("Authenticated API", () => {
           env,
           ctx
         );
-        expect(await response.text()).toBe("0");
+        const responseJson = await response.json<CounterResponse>();
+        expect(responseJson.amount).toBe(0);
       });
-      it("increases by 1 after you create a contract", async () => {
+      it("increases by 13 after you create a contract worth 13", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", { method: "POST" }),
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 13 }),
+          }),
           env,
           ctx
         );
@@ -279,7 +339,8 @@ describe("Authenticated API", () => {
           env,
           ctx
         );
-        expect(await response3.text()).toBe("1");
+        const response3Json = await response3.json<CounterResponse>();
+        expect(response3Json.amount).toBe(13);
       });
     });
     describe("/refund", () => {

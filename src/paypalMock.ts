@@ -8,11 +8,19 @@ import { MockInterceptor } from "@miniflare/shared-test-environment/globals";
 
 import * as Paypal from "./paypalTypes";
 
+const closure = {
+  email: "",
+  amountUsd: "",
+};
+
 export default function () {
   const fetchMock = getMiniflareFetchMock();
   // Don't pass through to internet when route is not mocked.
   fetchMock.disableNetConnect();
   const paypalSandbox = fetchMock.get("https://api-m.sandbox.paypal.com");
+
+  closure.email = "";
+  closure.amountUsd = "";
 
   paypalSandbox
     .intercept({ method: "POST", path: "/v1/oauth2/token" })
@@ -120,8 +128,16 @@ export default function () {
   paypalSandbox
     .intercept({ method: "POST", path: "/v2/checkout/orders" })
     .reply(
-      withAuthorization(() => {
+      withAuthorization(({ body }) => {
+        if (typeof body != "string") {
+          return { statusCode: 400 };
+        }
         const id = orderId;
+        const bodyJson = JSON.parse(body) as {
+          purchase_units: Array<{ amount: { value: string } }>;
+        };
+        closure.amountUsd = bodyJson.purchase_units[0].amount.value;
+        console.log("Order AmountUsd", closure.amountUsd);
         return {
           statusCode: 201,
           data: JSON.stringify({
@@ -153,7 +169,6 @@ export default function () {
         };
       })
     );
-  let email: string | null; // This is captured in the closure so is reset every test.
   // This is not a real route, this is just used to mock the user using the UI
   // to enter the email and password.
   paypalSandbox
@@ -162,8 +177,8 @@ export default function () {
       console.log("intercepted");
       if (typeof body == "string") {
         const bodyJson = JSON.parse(body) as { orderId: string; email: string };
-        email = bodyJson.email;
-        console.log("Email ", email);
+        closure.email = bodyJson.email;
+        console.log("Email ", closure.email);
         return {
           statusCode: 201,
         };
@@ -179,10 +194,25 @@ export default function () {
     })
     .reply(
       withAuthorization(() => {
+        console.log("Capture Amount USD", closure.amountUsd);
         return {
           statusCode: 201,
           data: JSON.stringify({
-            payment_source: { paypal: { email_address: email } },
+            payment_source: { paypal: { email_address: closure.email } },
+            purchase_units: [
+              {
+                payments: {
+                  captures: [
+                    {
+                      amount: {
+                        currency_code: "USD",
+                        value: closure.amountUsd,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
           }),
         };
       })

@@ -120,7 +120,8 @@
     ],
     "coverageDirectory": ".",
     "extensionsToTreatAsEsm": [
-      ".ts"
+      ".ts",
+      ".tsx"
     ],
     "setupFiles": [
       "react-app-polyfill/jsdom"

@@ -3,13 +3,28 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+
+/* It seems like a client ID is unnecessary, let's just leave it out rather */
+const CLIENT_ID = "test";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
+
 root.render(
   <React.StrictMode>
-    <App />
+    {/* From [react-paypal-js documentation][1]. Context Provider - this
+     * <PayPalScriptProvider /> component manages loading the JS SDK script. Add
+     * it to the root of your React app. It uses the Context API for managing
+     * state and communicating to child components. It also supports reloading
+     * the script when parameters change.
+     *
+     * [1]: https://www.npmjs.com/package/@paypal/react-paypal-js
+     */}
+    <PayPalScriptProvider options={{ "client-id": CLIENT_ID }}>
+      <App PaypalButtons={PayPalButtons} />
+    </PayPalScriptProvider>
   </React.StrictMode>
 );
 

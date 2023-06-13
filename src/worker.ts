@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import * as Itty from "itty-router";
 
 import * as Paypal from "./paypalTypes";
+import { getInvalidAmountError } from "./common";
 
 /**
  * Welcome to Cloudflare Workers! This is your first worker.
@@ -43,8 +44,14 @@ export default {
       corsTransform = corsify;
     }
 
-    router.post("/contract", async () => {
-      const order = await createOrder("19.00", env);
+    router.post("/contract", async (req) => {
+      const jsonBody = await req.json<{ amount: number }>();
+      const amount = Number(jsonBody.amount.toFixed(2));
+      const error = getInvalidAmountError(amount);
+      if (error != null) {
+        return Itty.error(400, { error });
+      }
+      const order = await createOrder(amount.toFixed(2), env);
       console.log(order);
       return order;
     });
@@ -54,10 +61,14 @@ export default {
       const response = await capturePayment(orderID, env);
       console.log(JSON.stringify(response, null, 2));
       const returnAddress = response.payment_source.paypal.email_address;
+      // TODO Error handling
+      const amount = Number(
+        response.purchase_units[0].payments.captures[0].amount.value
+      );
       const obj = Counter.fromName(env, "demoProject");
       await obj.fetch(request.url, {
         method: "PUT",
-        body: JSON.stringify({ returnAddress }),
+        body: JSON.stringify({ returnAddress, amount }),
       });
       return response;
     });
@@ -87,6 +98,11 @@ export default {
 
 type PutContractBody = {
   returnAddress: string;
+  amount: number;
+};
+
+export type CounterResponse = {
+  amount: number;
 };
 
 // Durable Object
@@ -113,27 +129,30 @@ export class Counter implements DurableObject {
     // Durable Object storage is automatically cached in-memory, so reading the
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
-    const returnAddressList =
-      (await this.state.storage.get<{ [key: string]: string }>(
-        "returnAddressList"
-      )) || ({} as { [key: string]: string });
-    console.log(returnAddressList);
-    const path = new URL(request.url).pathname;
-    const method = request.method;
-    console.log("Counter", method, path);
+
+    type Order = { returnAddress: string; amount: number };
+    type OrderMap = { [orderId: string]: Order };
+    const orderMap: OrderMap = (await this.state.storage.get("orderMap")) || {};
 
     const router = Itty.Router();
 
     router.get("/counter", () => {
-      return Object.keys(returnAddressList).length;
+      return {
+        amount: Object.values(orderMap).reduce(
+          (total, o) => total + o.amount,
+          0
+        ),
+      };
     });
 
     router.put("/contract/:orderId", async (req) => {
       const orderId: string = req.params.orderId;
       const body = await request.json<PutContractBody>();
-      returnAddressList[orderId] = body.returnAddress;
-      console.log(returnAddressList);
-      await this.state.storage.put("returnAddressList", returnAddressList);
+      orderMap[orderId] = {
+        returnAddress: body.returnAddress,
+        amount: body.amount,
+      };
+      await this.state.storage.put("orderMap", orderMap);
       return "";
     });
 
@@ -144,7 +163,7 @@ export class Counter implements DurableObject {
         const response = await payout(
           this.env,
           refund,
-          Object.values(returnAddressList)
+          Object.values(orderMap).map((o: Order) => o.returnAddress)
         );
         console.log(JSON.stringify(response));
         await this.state.storage.put("refund", refund);
