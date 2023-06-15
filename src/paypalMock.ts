@@ -11,6 +11,8 @@ import * as Paypal from "./paypalTypes";
 const closure = {
   email: "",
   amountUsd: "",
+  givenName: "",
+  surname: "",
 };
 
 export default function () {
@@ -21,6 +23,8 @@ export default function () {
 
   closure.email = "";
   closure.amountUsd = "";
+  closure.givenName = "";
+  closure.surname = "";
 
   paypalSandbox
     .intercept({ method: "POST", path: "/v1/oauth2/token" })
@@ -176,8 +180,15 @@ export default function () {
     .reply(({ body }) => {
       console.log("intercepted");
       if (typeof body == "string") {
-        const bodyJson = JSON.parse(body) as { orderId: string; email: string };
+        const bodyJson = JSON.parse(body) as {
+          orderId: string;
+          email: string;
+          givenName: string;
+          surname: string;
+        };
         closure.email = bodyJson.email;
+        closure.givenName = bodyJson.givenName;
+        closure.surname = bodyJson.surname;
         console.log("Email ", closure.email);
         return {
           statusCode: 201,
@@ -198,7 +209,15 @@ export default function () {
         return {
           statusCode: 201,
           data: JSON.stringify({
-            payment_source: { paypal: { email_address: closure.email } },
+            payment_source: {
+              paypal: {
+                email_address: closure.email,
+                name: {
+                  given_name: closure.givenName,
+                  surname: closure.surname,
+                },
+              },
+            },
             purchase_units: [
               {
                 payments: {

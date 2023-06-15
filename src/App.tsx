@@ -8,7 +8,7 @@ import type {
 } from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import "./App.css";
-import type { CreateOrderResponse } from "./worker";
+import type { CreateOrderResponse, Order } from "./worker";
 import { getInvalidAmountError } from "./common";
 
 export const WORKER_URL =
@@ -37,6 +37,8 @@ function App(props: AppProps) {
   const [funded, setFunded] = React.useState(false);
   const [refunded, setRefunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(19);
+  const [progress, setProgress] = React.useState(-1);
+  const [orders, setOrders] = React.useState<Order[]>([]);
 
   React.useEffect(() => {
     void (async () => {
@@ -46,6 +48,16 @@ function App(props: AppProps) {
       }
     })();
   }, [funded]);
+
+  React.useEffect(() => {
+    void (async () => {
+      const count = await fetch(WORKER_URL + "/counter");
+      const response = await count.json<{ amount: number; orders: Order[] }>();
+      setProgress(response.amount);
+      setOrders(response.orders);
+    })();
+  }, [funded]);
+
   return (
     <>
       <h1>Dominant Assurance Contract Prototype</h1>
@@ -78,7 +90,7 @@ function App(props: AppProps) {
                   amountRef.current * 1.2
                 ).toFixed(2)} refund!`}
             </p>
-            <FundingProgressBar funded={funded} />
+            <FundingProgressBar funded={funded} progress={progress} />
             <PaypalButtons
               fundingSource={
                 /* Don't allow weird sources, because I may Paypal the money back */
@@ -127,20 +139,21 @@ function App(props: AppProps) {
               }}
             />
           </form>
+          <h3>Funders</h3>
+          <FunderTable orders={orders} />
         </>
       )}
     </>
   );
 }
 
-export function FundingProgressBar({ funded }: { funded: boolean }) {
-  const [progress, setProgress] = React.useState(-1);
-  React.useEffect(() => {
-    void (async () => {
-      const count = await fetch(WORKER_URL + "/counter");
-      setProgress((await count.json<{ amount: number }>()).amount);
-    })();
-  }, [funded]);
+export type FundingProgressBarProps = {
+  funded: boolean;
+  progress: number;
+};
+
+export function FundingProgressBar(props: FundingProgressBarProps) {
+  const { funded, progress } = props;
   return progress == -1 ? (
     <span>Loading...</span>
   ) : (
@@ -150,6 +163,53 @@ export function FundingProgressBar({ funded }: { funded: boolean }) {
       {funded ? " Thank you!" : null}
     </>
   );
+}
+
+export type FunderTableProps = {
+  orders: Order[];
+};
+
+export function FunderTable(props: FunderTableProps) {
+  const { orders } = props;
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th> Time ({getLocalTimezoneShortName()}) </th>
+          <th> Name </th>
+          <th> Amount ($) </th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((order) => (
+          <tr key={order.time}>
+            <td> {formatTime(order.time)} </td>
+            <td> {order.name} </td>
+            <td> {order.amount} </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function getLocalTimezoneShortName() {
+  return new Date()
+    .toLocaleDateString(undefined, { day: "2-digit", timeZoneName: "short" })
+    .substring(4);
+}
+
+/** Returns local time in format "0000-00-00 00:00" */
+export function formatTime(isoTimeString: string): string {
+  // Does javascript not support %Y-%m-%d %H:%M format string?
+  const time = new Date(isoTimeString);
+  const pad = (v: number) => (String(v).length == 1 ? "0" : "") + String(v);
+  return (
+    `${time.getFullYear()}-${pad(time.getMonth() + 1)}` +
+    `-${pad(time.getDate())} ` +
+    `${pad(time.getHours())}:${pad(time.getMinutes())}`
+  );
+  // return time.toISOString().replace("T", " ").slice(0, "0000-00-00 00:00".length);
 }
 
 export default App;

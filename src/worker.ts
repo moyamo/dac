@@ -61,14 +61,19 @@ export default {
       const response = await capturePayment(orderID, env);
       console.log(JSON.stringify(response, null, 2));
       const returnAddress = response.payment_source.paypal.email_address;
+      const name =
+        response.payment_source.paypal.name.given_name +
+        " " +
+        response.payment_source.paypal.name.surname;
       // TODO Error handling
       const amount = Number(
         response.purchase_units[0].payments.captures[0].amount.value
       );
+      const time = new Date().toISOString();
       const obj = Counter.fromName(env, "demoProject");
       await obj.fetch(request.url, {
         method: "PUT",
-        body: JSON.stringify({ returnAddress, amount }),
+        body: JSON.stringify({ returnAddress, amount, name, time }),
       });
       return response;
     });
@@ -99,10 +104,19 @@ export default {
 type PutContractBody = {
   returnAddress: string;
   amount: number;
+  name: string;
+  time: string;
+};
+
+export type Order = {
+  time: string;
+  name: string;
+  amount: number;
 };
 
 export type CounterResponse = {
   amount: number;
+  orders: Order[];
 };
 
 // Durable Object
@@ -130,8 +144,13 @@ export class Counter implements DurableObject {
     // same key every request is fast. (That said, you could also store the
     // value in a class member if you prefer.)
 
-    type Order = { returnAddress: string; amount: number };
-    type OrderMap = { [orderId: string]: Order };
+    type InternalOrder = {
+      returnAddress: string;
+      amount: number;
+      name: string;
+      time: string;
+    };
+    type OrderMap = { [orderId: string]: InternalOrder };
     const orderMap: OrderMap = (await this.state.storage.get("orderMap")) || {};
 
     const router = Itty.Router();
@@ -142,6 +161,17 @@ export class Counter implements DurableObject {
           (total, o) => total + o.amount,
           0
         ),
+        orders: Object.values(orderMap).map((order) => {
+          const names = order.name.split(" ");
+          // It's possible that name[1] is a middle name and not a surname, but
+          // I don't really care
+          const anonymizedName = `${names[0]} ${names[1].slice(0, 1)}.`;
+          return {
+            time: order.time,
+            name: anonymizedName,
+            amount: order.amount,
+          };
+        }),
       };
     });
 
@@ -151,6 +181,8 @@ export class Counter implements DurableObject {
       orderMap[orderId] = {
         returnAddress: body.returnAddress,
         amount: body.amount,
+        name: body.name,
+        time: body.time,
       };
       await this.state.storage.put("orderMap", orderMap);
       return "";
@@ -163,7 +195,7 @@ export class Counter implements DurableObject {
         const response = await payout(
           this.env,
           refund,
-          Object.values(orderMap).map((o: Order) => o.returnAddress)
+          Object.values(orderMap).map((o) => o.returnAddress)
         );
         console.log(JSON.stringify(response));
         await this.state.storage.put("refund", refund);

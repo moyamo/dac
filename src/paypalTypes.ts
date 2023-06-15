@@ -46,7 +46,18 @@ export type CapturePaymentResponse = {
   id: string;
   links: Link[];
   payer: unknown;
-  payment_source: { paypal: { email_address: string } };
+  payment_source: {
+    paypal: {
+      account_id: string;
+      account_status: string;
+      address: unknown;
+      email_address: string;
+      name: {
+        given_name: string;
+        surname: string;
+      };
+    };
+  };
   purchase_units: Array<{
     payments: {
       captures: Array<{

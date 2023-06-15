@@ -94,6 +94,8 @@ describe("Authenticated API", () => {
         body: JSON.stringify({
           email: "testemail@example.com",
           orderId: orderId,
+          givenName: "James",
+          surname: "Smith",
         }),
       });
       // Finally, capture payment
@@ -101,6 +103,8 @@ describe("Authenticated API", () => {
       expect(r.payment_source.paypal.email_address).toBe(
         "testemail@example.com"
       );
+      expect(r.payment_source.paypal.name.given_name).toBe("James");
+      expect(r.payment_source.paypal.name.surname).toBe("Smith");
     });
   });
 
@@ -111,6 +115,7 @@ describe("Authenticated API", () => {
         const response = await counter.fetch("http://localhost/counter");
         const responseJson = await response.json<CounterResponse>();
         expect(responseJson.amount).toBe(0);
+        expect(responseJson.orders).toHaveLength(0);
       });
     });
     describe("PUT /contract/:contract", () => {
@@ -120,12 +125,21 @@ describe("Authenticated API", () => {
         await counter.fetch("http://localhost/contract/contractOne", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_address: "email_address", amount: 11 }),
+          body: JSON.stringify({
+            returnAddress: "email_address",
+            amount: 11,
+            name: "John Doe",
+            time: "2023-01-01T01:01:01.000Z",
+          }),
         });
 
         const response2 = await counter.fetch("http://localhost/counter");
         const response2Json = await response2.json<CounterResponse>();
         expect(response2Json.amount).toBe(11);
+        expect(response2Json.orders).toHaveLength(1);
+        expect(response2Json.orders[0].name).toBe("John D.");
+        expect(response2Json.orders[0].amount).toBe(11);
+        expect(response2Json.orders[0].time).toBe("2023-01-01T01:01:01.000Z");
       });
       it("add an $11 contract and $32 contract", async () => {
         const counter = Counter.fromName(env, "test");
@@ -136,6 +150,8 @@ describe("Authenticated API", () => {
           body: JSON.stringify({
             email_address: "exampleOne@example.com",
             amount: 11,
+            name: "John Doe",
+            time: "2023-01-03T01:01:01.000Z",
           }),
         });
 
@@ -145,12 +161,21 @@ describe("Authenticated API", () => {
           body: JSON.stringify({
             email_address: "exampleTwo@example.com",
             amount: 32,
+            name: "James Smith",
+            time: "2023-01-04T02:02:02.000Z",
           }),
         });
 
         const response3 = await counter.fetch("http://localhost/counter");
         const response3Json = await response3.json<CounterResponse>();
         expect(response3Json.amount).toBe(43);
+        expect(response3Json.orders).toHaveLength(2);
+        expect(response3Json.orders[0].name).toBe("John D.");
+        expect(response3Json.orders[0].amount).toBe(11);
+        expect(response3Json.orders[0].time).toBe("2023-01-03T01:01:01.000Z");
+        expect(response3Json.orders[1].name).toBe("James S.");
+        expect(response3Json.orders[1].amount).toBe(32);
+        expect(response3Json.orders[1].time).toBe("2023-01-04T02:02:02.000Z");
       });
       it("to be idempotent", async () => {
         const counter = Counter.fromName(env, "test");
@@ -160,6 +185,8 @@ describe("Authenticated API", () => {
           body: JSON.stringify({
             email_address: "exampleOne@example.com",
             amount: 11,
+            name: "John Doe",
+            time: "2023-01-04T02:02:02.000Z",
           }),
           headers: {
             "Content-Type": "application/json",
@@ -173,6 +200,8 @@ describe("Authenticated API", () => {
           body: JSON.stringify({
             email_address: "exampleTwo@example.com",
             amount: 11,
+            name: "John Doe",
+            time: "2023-01-04T02:02:02.000Z",
           }),
         });
 
@@ -315,17 +344,31 @@ describe("Authenticated API", () => {
         );
         const responseJson = await response.json<CounterResponse>();
         expect(responseJson.amount).toBe(0);
+        expect(responseJson.orders).toHaveLength(0);
       });
       it("increases by 13 after you create a contract worth 13", async () => {
         const response = await worker.fetch(
           new Request("http://localhost/contract", {
             method: "POST",
-            body: JSON.stringify({ amount: 13 }),
+            body: JSON.stringify({ amount: 15 }),
           }),
           env,
           ctx
         );
         const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
+
+        await fetch(`${baseURL.sandbox}/mock/approve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "testemail@example.com",
+            orderId: orderId,
+            givenName: "John",
+            surname: "Doe",
+          }),
+        });
 
         await worker.fetch(
           new Request(`http://localhost/contract/${orderId}`, {
@@ -340,7 +383,10 @@ describe("Authenticated API", () => {
           ctx
         );
         const response3Json = await response3.json<CounterResponse>();
-        expect(response3Json.amount).toBe(13);
+        expect(response3Json.amount).toBe(15);
+        expect(response3Json.orders).toHaveLength(1);
+        expect(response3Json.orders[0].name).toBe("John D.");
+        expect(response3Json.orders[0].amount).toBe(15);
       });
     });
     describe("/refund", () => {

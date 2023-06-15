@@ -5,7 +5,12 @@ import type {
   OnApproveData,
   OnApproveActions,
 } from "@paypal/paypal-js/types/components/buttons";
-import App, { FundingProgressBar, WORKER_URL } from "./App";
+import App, {
+  FundingProgressBar,
+  WORKER_URL,
+  FunderTable,
+  formatTime,
+} from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
 import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
@@ -21,7 +26,7 @@ beforeEach(() => {
 
 const server = setupServer(
   rest.get(WORKER_URL + "/counter", (_req, res, ctx) => {
-    return res(ctx.json({ amount: counter }));
+    return res(ctx.json({ amount: counter, orders: [] }));
   }),
   rest.get(WORKER_URL + "/refund", (_req, res, ctx) => {
     return refunded ? res() : res(ctx.status(404));
@@ -120,7 +125,7 @@ test("App in-progress", async () => {
   const progressbar = await screen.findByRole("progressbar");
   const paypalButton = await screen.findByText("PayPal");
 
-  expect(progressbar).toHaveAttribute("value", "0");
+  await waitFor(() => expect(progressbar).toHaveAttribute("value", "0"));
 
   fireEvent.click(paypalButton);
   const fundedText = await screen.findByText(/Thank you/i);
@@ -171,7 +176,7 @@ test("Custom amount of $32 dollars accepted", async () => {
   const progressbar = await screen.findByRole("progressbar");
   const amountInput = await screen.findByLabelText("Amount");
 
-  expect(progressbar).toHaveAttribute("value", "0");
+  await waitFor(() => expect(progressbar).toHaveAttribute("value", "0"));
 
   fireEvent.change(amountInput, { target: { value: 32 } });
 
@@ -182,14 +187,47 @@ test("Custom amount of $32 dollars accepted", async () => {
 });
 
 test("FundingProgressBar", async () => {
-  counter = 3 * 19;
-  const { rerender } = render(<FundingProgressBar funded={false} />);
+  const { rerender } = render(
+    <FundingProgressBar funded={false} progress={3 * 19} />
+  );
   const progressbar = await screen.findByRole("progressbar");
-  expect(progressbar).toHaveAttribute("value", `${19 * 3}`);
+  await waitFor(() =>
+    expect(progressbar).toHaveAttribute("value", `${19 * 3}`)
+  );
 
-  counter = 4 * 19;
-  rerender(<FundingProgressBar funded={true} />);
+  rerender(<FundingProgressBar funded={true} progress={19 * 4} />);
   await waitFor(() =>
     expect(progressbar).toHaveAttribute("value", `${19 * 4}`)
+  );
+});
+
+test("Table of Funders", async () => {
+  render(
+    <FunderTable
+      orders={[
+        {
+          name: "Joe K.",
+          amount: 6,
+          time: new Date(2023, 0, 3, 23, 24).toISOString(),
+        },
+        {
+          name: "Bob M.",
+          amount: 30,
+          time: new Date(2023, 0, 5, 8, 32).toISOString(),
+        },
+      ]}
+    />
+  );
+  expect(await screen.findByText(/2023-01-03 23:24/)).toBeInTheDocument();
+  expect(await screen.findByText(/Joe K./)).toBeInTheDocument();
+  expect(await screen.findByText(/6/)).toBeInTheDocument();
+  expect(await screen.findByText(/2023-01-05 08:32/)).toBeInTheDocument();
+  expect(await screen.findByText(/Bob M./)).toBeInTheDocument();
+  expect(await screen.findByText(/30/)).toBeInTheDocument();
+});
+
+test("formatTime", () => {
+  expect(formatTime(new Date(2023, 0, 3, 23, 24).toISOString())).toBe(
+    "2023-01-03 23:24"
   );
 });

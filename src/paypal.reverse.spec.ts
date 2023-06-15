@@ -38,6 +38,22 @@ if (PAYPAL_SANDBOX_EMAIL_1_PASSWORD == "ERROR NO SANDBOX EMAIL 1 PASSWORD") {
     "PAYAPL_SANDBOX_EMAIL_1_PASSWORD not specified in environment variables"
   );
 }
+const PAYPAL_SANDBOX_EMAIL_1_GIVEN_NAME: string =
+  process.env.PAYPAL_SANDBOX_EMAIL_1_GIVEN_NAME ||
+  "ERROR NO SANDBOX EMAIL 1 GIVEN NAME";
+if (PAYPAL_SANDBOX_EMAIL_1 == "ERROR NO SANDBOX EMAIL 1 GIVEN NAME") {
+  throw new Error(
+    "PAYAPL_SANDBOX_EMAIL_1_GIVEN_NAME not specified in environment variables"
+  );
+}
+const PAYPAL_SANDBOX_EMAIL_1_SURNAME: string =
+  process.env.PAYPAL_SANDBOX_EMAIL_1_SURNAME ||
+  "ERROR NO SANDBOX EMAIL 1 SURNAME";
+if (PAYPAL_SANDBOX_EMAIL_1 == "ERROR NO SANDBOX EMAIL 1 SURNAME") {
+  throw new Error(
+    "PAYAPL_SANDBOX_EMAIL_1_SURNAME not specified in environment variables"
+  );
+}
 
 const TEST_WHAT =
   process.env.REVERSE_SPEC_TEST_WHAT == "SPEC" ? "SPEC" : "MOCK";
@@ -367,6 +383,8 @@ test("capture payment", async () => {
       body: JSON.stringify({
         orderId: orderId,
         email: PAYPAL_SANDBOX_EMAIL_1,
+        givenName: PAYPAL_SANDBOX_EMAIL_1_GIVEN_NAME,
+        surname: PAYPAL_SANDBOX_EMAIL_1_SURNAME,
       }),
     });
   }
@@ -388,6 +406,12 @@ test("capture payment", async () => {
   // so let's just test what's relevant for us.
   expect(body2.payment_source.paypal.email_address).toBe(
     PAYPAL_SANDBOX_EMAIL_1
+  );
+  expect(body2.payment_source.paypal.name.given_name).toBe(
+    PAYPAL_SANDBOX_EMAIL_1_GIVEN_NAME
+  );
+  expect(body2.payment_source.paypal.name.surname).toBe(
+    PAYPAL_SANDBOX_EMAIL_1_SURNAME
   );
   expect(body2.purchase_units).toHaveLength(1);
   expect(body2.purchase_units[0].payments.captures).toHaveLength(1);
