@@ -7,3 +7,7 @@ export function getInvalidAmountError(amount: number): string | null {
     return null;
   }
 }
+
+export function hasFundingDeadlinePassed(fundingDeadline: string): boolean {
+  return fundingDeadline < new Date().toISOString();
+}

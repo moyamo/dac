@@ -10,6 +10,7 @@ import App, {
   WORKER_URL,
   FunderTable,
   formatTime,
+  FundingTimer,
 } from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
@@ -18,15 +19,26 @@ import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
 let counter = 0;
 let refunded = false;
 let pendingAmount: number | null = null;
+let fundingDeadline = "2023-01-01T01:01:01Z";
 beforeEach(() => {
   counter = 0;
   refunded = false;
   pendingAmount = null;
+  const future = new Date();
+  future.setHours(future.getHours() + 24);
+  fundingDeadline = future.toISOString();
 });
 
 const server = setupServer(
   rest.get(WORKER_URL + "/counter", (_req, res, ctx) => {
-    return res(ctx.json({ amount: counter, orders: [] }));
+    return res(
+      ctx.json({
+        amount: counter,
+        orders: [],
+        fundingGoal: 507,
+        fundingDeadline: fundingDeadline,
+      })
+    );
   }),
   rest.get(WORKER_URL + "/refund", (_req, res, ctx) => {
     return refunded ? res() : res(ctx.status(404));
@@ -186,19 +198,52 @@ test("Custom amount of $32 dollars accepted", async () => {
   expect(counter).toBe(32);
 });
 
+test("Funding deadline passed", async () => {
+  fundingDeadline = "2023-01-01T01:03:00Z";
+  render(<App PaypalButtons={MockPaypalButtons} />);
+  expect(await screen.findByText(/Funding closed/i)).toBeInTheDocument();
+  expect(screen.queryByText("PayPal")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
+});
+
+test("Funding deadline shown", async () => {
+  fundingDeadline = new Date(2023, 0, 1, 18, 1, 0).toISOString();
+  render(<App PaypalButtons={MockPaypalButtons} />);
+  expect(await screen.findByText(/2023-01-01 18:01/i)).toBeInTheDocument();
+});
+
+test("Funding count-down shown", async () => {
+  const future = new Date();
+  future.setDate(future.getDate() + 1);
+  future.setHours(future.getHours() + 2);
+  future.setMinutes(future.getMinutes() + 3);
+  future.setSeconds(future.getSeconds() + 4);
+  fundingDeadline = future.toISOString();
+
+  render(<App PaypalButtons={MockPaypalButtons} />);
+  expect(await screen.findByText("01:02:03:04")).toBeInTheDocument();
+});
+
 test("FundingProgressBar", async () => {
   const { rerender } = render(
-    <FundingProgressBar funded={false} progress={3 * 19} />
+    <FundingProgressBar funded={false} progress={3 * 19} goal={203} />
   );
   const progressbar = await screen.findByRole("progressbar");
-  await waitFor(() =>
-    expect(progressbar).toHaveAttribute("value", `${19 * 3}`)
-  );
+  await waitFor(() => {
+    expect(progressbar).toHaveAttribute("value", `${19 * 3}`);
+    expect(progressbar).toHaveAttribute("max", "203");
+  });
 
-  rerender(<FundingProgressBar funded={true} progress={19 * 4} />);
-  await waitFor(() =>
-    expect(progressbar).toHaveAttribute("value", `${19 * 4}`)
-  );
+  rerender(<FundingProgressBar funded={true} progress={19 * 4} goal={203} />);
+  await waitFor(() => {
+    expect(progressbar).toHaveAttribute("value", `${19 * 4}`);
+    expect(progressbar).toHaveAttribute("max", "203");
+  });
+});
+
+test("Funding Timer Loading", async () => {
+  render(<FundingTimer deadline="" />);
+  expect(await screen.findByText(/Loading/i)).toBeInTheDocument();
 });
 
 test("Table of Funders", async () => {

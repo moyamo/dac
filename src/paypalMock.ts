@@ -13,6 +13,7 @@ const closure = {
   amountUsd: "",
   givenName: "",
   surname: "",
+  orderCount: 0,
 };
 
 export default function () {
@@ -25,6 +26,7 @@ export default function () {
   closure.amountUsd = "";
   closure.givenName = "";
   closure.surname = "";
+  closure.orderCount = 0;
 
   paypalSandbox
     .intercept({ method: "POST", path: "/v1/oauth2/token" })
@@ -129,6 +131,7 @@ export default function () {
       })
     );
   const orderId = "ABC0123456789";
+  const captureId = "XZY98765421";
   paypalSandbox
     .intercept({ method: "POST", path: "/v2/checkout/orders" })
     .reply(
@@ -136,7 +139,8 @@ export default function () {
         if (typeof body != "string") {
           return { statusCode: 400 };
         }
-        const id = orderId;
+        const id = `${orderId}${closure.orderCount}`;
+        closure.orderCount += 1;
         const bodyJson = JSON.parse(body) as {
           purchase_units: Array<{ amount: { value: string } }>;
         };
@@ -198,44 +202,92 @@ export default function () {
       }
     });
 
+  function capture(count: number) {
+    return withAuthorization(() => {
+      console.log("Capture Amount USD", closure.amountUsd);
+      return {
+        statusCode: 201,
+        data: JSON.stringify({
+          payment_source: {
+            paypal: {
+              email_address: closure.email,
+              name: {
+                given_name: closure.givenName,
+                surname: closure.surname,
+              },
+            },
+          },
+          purchase_units: [
+            {
+              payments: {
+                captures: [
+                  {
+                    id: `${captureId}${count}`,
+                    amount: {
+                      currency_code: "USD",
+                      value: closure.amountUsd,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      };
+    });
+  }
   paypalSandbox
     .intercept({
       method: "POST",
-      path: `/v2/checkout/orders/${orderId}/capture`,
+      path: `/v2/checkout/orders/${orderId}0/capture`,
     })
-    .reply(
-      withAuthorization(() => {
-        console.log("Capture Amount USD", closure.amountUsd);
-        return {
-          statusCode: 201,
-          data: JSON.stringify({
-            payment_source: {
-              paypal: {
-                email_address: closure.email,
-                name: {
-                  given_name: closure.givenName,
-                  surname: closure.surname,
-                },
-              },
+    .reply(capture(0));
+
+  paypalSandbox
+    .intercept({
+      method: "POST",
+      path: `/v2/checkout/orders/${orderId}1/capture`,
+    })
+    .reply(capture(0));
+
+  function refund(count: number) {
+    return withAuthorization(() => {
+      const refundId = `REFUNDID${count}`;
+      return {
+        statusCode: 201,
+        data: JSON.stringify({
+          id: refundId,
+          status: "COMPLETED",
+          links: [
+            {
+              href: `https://api.sandbox.paypal.com/v2/payments/refunds/${refundId}`,
+              method: "GET",
+              rel: "self",
             },
-            purchase_units: [
-              {
-                payments: {
-                  captures: [
-                    {
-                      amount: {
-                        currency_code: "USD",
-                        value: closure.amountUsd,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          }),
-        };
-      })
-    );
+            {
+              href: `https://api.sandbox.paypal.com/v2/payments/captures/${captureId}${count}`,
+              method: "GET",
+              rel: "up",
+            },
+          ],
+        }),
+      };
+    });
+  }
+
+  paypalSandbox
+    .intercept({
+      method: "POST",
+      path: `/v2/payments/captures/${captureId}0/refund`,
+    })
+    .reply(refund(0));
+
+  paypalSandbox
+    .intercept({
+      method: "POST",
+      path: `/v2/payments/captures/${captureId}1/refund`,
+    })
+    .reply(refund(1));
 }
 
 /** Get's authorization header from mocked headers */

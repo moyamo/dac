@@ -3,3 +3,7 @@ PAYPAL_APP_SECRET=blahblahblah
 # Since the frontend and backend are on different origins,
 # this is used by the backend to CORS-allow the frontend.
 FRONTEND_URL=http://localhost:3000
+# The ISO time of when funding closes
+FUNDING_DEADLINE=2030-06-18T17:00:00Z
+# The amount of USD needed to reach the goal
+FUNDING_GOAL=850

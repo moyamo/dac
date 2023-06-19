@@ -84,3 +84,9 @@ export type CapturePaymentResponse = {
   }>;
   status: string;
 };
+
+export type RefundCaptureResponse = {
+  id: string;
+  status: string;
+  links: Link[];
+};

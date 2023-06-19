@@ -17,6 +17,7 @@ import worker, {
   capturePayment,
   Counter,
   CounterResponse,
+  refundCapture,
 } from "./worker";
 
 let env: Env;
@@ -55,6 +56,10 @@ describe("Authenticated API", () => {
   beforeEach(() => {
     env.PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "valid_client_id";
     env.PAYPAL_APP_SECRET = process.env.PAYPAL_APP_SECRET || "valid_app_secret";
+    // default to the future for most tests
+    const future = new Date();
+    future.setHours(future.getHours() + 24);
+    env.FUNDING_DEADLINE = future.toISOString();
   });
 
   describe("payout", () => {
@@ -108,6 +113,35 @@ describe("Authenticated API", () => {
     });
   });
 
+  describe("refundCapture", () => {
+    it("works", async () => {
+      // Create order
+      const response = await createOrder("10.00", env);
+      const orderId = response.id;
+      // Mock user approving charge
+      await fetch(`${baseURL.sandbox}/mock/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "testemail@example.com",
+          orderId: orderId,
+          givenName: "James",
+          surname: "Smith",
+        }),
+      });
+      // Capture payment
+      const captureResponse = await capturePayment(orderId, env);
+      const captureId =
+        captureResponse.purchase_units[0].payments.captures[0].id;
+      // Finally refund capture
+      const r = await refundCapture(captureId, env);
+      expect(r.id.length).toBeGreaterThan(1);
+      expect(r.status).toBe("COMPLETED");
+    });
+  });
+
   describe("Counter", () => {
     describe("GET /counter", () => {
       it("returns 0 when uninitialized", async () => {
@@ -116,6 +150,30 @@ describe("Authenticated API", () => {
         const responseJson = await response.json<CounterResponse>();
         expect(responseJson.amount).toBe(0);
         expect(responseJson.orders).toHaveLength(0);
+      });
+      it("defaults to a funding deadline in the past when not set", async () => {
+        delete env.FUNDING_DEADLINE;
+        const counter = Counter.fromName(env, "test");
+        const response = await counter.fetch("http://localhost/counter");
+        const responseJson = await response.json<CounterResponse>();
+        expect(new Date(responseJson.fundingDeadline) < new Date()).toBe(true);
+      });
+      it("returns the funding deadline", async () => {
+        const now = new Date();
+        const future = new Date();
+        future.setHours(now.getHours() + 1);
+        env.FUNDING_DEADLINE = future.toISOString();
+        const counter = Counter.fromName(env, "test");
+        const response = await counter.fetch("http://localhost/counter");
+        const responseJson = await response.json<CounterResponse>();
+        expect(responseJson.fundingDeadline).toBe(future.toISOString());
+      });
+      it("returns the funding goal", async () => {
+        env.FUNDING_GOAL = "303";
+        const counter = Counter.fromName(env, "test");
+        const response = await counter.fetch("http://localhost/counter");
+        const responseJson = await response.json<CounterResponse>();
+        expect(responseJson.fundingGoal).toBe(303);
       });
     });
     describe("PUT /contract/:contract", () => {
@@ -210,23 +268,82 @@ describe("Authenticated API", () => {
         expect(response3Json.amount).toBe(11);
       });
     });
-    describe("/refund", () => {
-      it("doesn't exist initially", async () => {
+    describe("/refunds", () => {
+      beforeEach(async () => {
         const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/refund");
+        await counter.fetch("http://localhost/contract/contractOne", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email_address: "exampleOne@example.com",
+            amount: 11,
+            captureId: "ABC0",
+            refunded: false,
+            name: "John Doe",
+            time: "2023-01-03T01:01:01.000Z",
+          }),
+        });
+
+        await counter.fetch("http://localhost/contract/contractTwo", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email_address: "exampleTwo@example.com",
+            amount: 32,
+            captureId: "ABC1",
+            refunded: false,
+            name: "James Smith",
+            time: "2023-01-04T02:02:02.000Z",
+          }),
+        });
+      });
+      it("no refunds before deadline", async () => {
+        const counter = Counter.fromName(env, "test");
+        const response = await counter.fetch("http://localhost/refunds");
         expect(response.status).toBe(404);
       });
-      it("exist after refunding", async () => {
+      it("has list of refunds after deadline has passed", async () => {
+        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
         const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/refund", {
-          method: "PUT",
+        const response = await counter.fetch("http://localhost/refunds");
+        expect(response.ok).toBeTruthy();
+        const responseJson = await response.json<{ captureIds: string[] }>();
+        expect(responseJson.captureIds).toHaveLength(2);
+      });
+      it("can delete a refund", async () => {
+        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+        const counter = Counter.fromName(env, "test");
+        const response = await counter.fetch("http://localhost/refunds");
+        expect(response.ok).toBeTruthy();
+        const responseJson = await response.json<{ captureIds: string[] }>();
+        expect(responseJson.captureIds).toHaveLength(2);
+        const captureId0 = responseJson.captureIds[0];
+        await counter.fetch(`http://localhost/refunds/${captureId0}`, {
+          method: "DELETE",
         });
-        // Returns an ID
-        const refundId: string = await response.text();
-        expect(refundId.length).toBeGreaterThan(1);
-
-        const response2 = await counter.fetch("http://localhost/refund");
+        const response2 = await counter.fetch("http://localhost/refunds");
         expect(response2.ok).toBeTruthy();
+        const response2Json = await response2.json<{ captureIds: string[] }>();
+        expect(response2Json.captureIds).toHaveLength(1);
+      });
+      it("no refund if deadline passed but project fully funded", async () => {
+        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+        env.FUNDING_GOAL = "100";
+        const counter = Counter.fromName(env, "test");
+        await counter.fetch("http://localhost/contract/contractTwo", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email_address: "exampleThree@example.com",
+            amount: 100,
+            captureId: "ABC3",
+            refunded: false,
+            name: "James Fully Funder",
+            time: "2023-01-07T02:02:02.000Z",
+          }),
+        });
+        const response = await counter.fetch("http://localhost/refunds");
+        expect(response.status).toBe(404);
       });
     });
     describe("fromName", () => {
@@ -292,6 +409,18 @@ describe("Authenticated API", () => {
           new Request("http://localhost/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 4 }),
+          }),
+          env,
+          ctx
+        );
+        expect(response.ok).toBeFalsy();
+      });
+      it("fails when deadline has passed", async () => {
+        env.FUNDING_DEADLINE = "2023-01-01T00:00:00Z";
+        const response = await worker.fetch(
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 10 }),
           }),
           env,
           ctx
@@ -390,28 +519,66 @@ describe("Authenticated API", () => {
       });
     });
     describe("/refund", () => {
-      it("GET is initially 404", async () => {
+      it("POST is initially 404", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/refund"),
+          new Request("http://localhost/refund", { method: "POST" }),
           env,
           ctx
         );
         expect(response.status).toBe(404);
       });
-      it("GET is 200 after PUT", async () => {
+      it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/refund", { method: "PUT" }),
+          new Request("http://localhost/contract", {
+            method: "POST",
+            body: JSON.stringify({ amount: 15 }),
+          }),
           env,
           ctx
         );
-        const refundId = await response.text();
-        expect(refundId.length).toBeGreaterThanOrEqual(1);
-        const response2 = await worker.fetch(
-          new Request("http://localhost/refund"),
+        const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
+
+        await fetch(`${baseURL.sandbox}/mock/approve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "testemail@example.com",
+            orderId: orderId,
+            givenName: "John",
+            surname: "Doe",
+          }),
+        });
+
+        await worker.fetch(
+          new Request(`http://localhost/contract/${orderId}`, {
+            method: "PATCH",
+          }),
           env,
           ctx
         );
-        expect(response2.status).toBe(200);
+        const response3 = await worker.fetch(
+          new Request("http://localhost/refund", { method: "POST" }),
+          env,
+          ctx
+        );
+        expect(response3.status).toBe(404);
+        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+        const response4 = await worker.fetch(
+          new Request("http://localhost/refund", { method: "POST" }),
+          env,
+          ctx
+        );
+        expect(response4.status).toBe(201);
+        const response4Json = await response4.json<{ refundId: string }>();
+        expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
+        const response5 = await worker.fetch(
+          new Request("http://localhost/refund", { method: "POST" }),
+          env,
+          ctx
+        );
+        expect(response5.status).toBe(404);
       });
     });
   });

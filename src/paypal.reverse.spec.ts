@@ -418,8 +418,127 @@ test("capture payment", async () => {
   const capture = body2.purchase_units[0].payments.captures[0];
   expect(capture.amount.currency_code).toBe("USD");
   expect(capture.amount.value).toBe(amountUsd);
+  expect(capture.id.length).toBeGreaterThanOrEqual(1);
 }, 30000 /* ms. Increase timout it since we open chrome which could
- take a while. */);
+            take a while. */);
+
+test("Refund Paypal payment", async () => {
+  const accessToken = await generateAccessToken();
+  const amountUsd = "7.00";
+  // Create the order on the backend
+  const response = await fetch(`${baseURL.sandbox}/v2/checkout/orders`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: {
+            currency_code: "USD",
+            value: amountUsd,
+          },
+        },
+      ],
+    }),
+  });
+  const body: Paypal.CreateOrderResponse = await response.json();
+  const orderId = body.id;
+
+  // Approve the order as the user
+  if (TEST_WHAT == "SPEC") {
+    const approveLink = body.links.filter((link) => link.rel == "approve")[0];
+    await (async () => {
+      // Doesn't seem to work in headless mode. Fix later.
+      const browser = await puppeteer.launch({ headless: false });
+      const page = await browser.newPage();
+      await page.goto(approveLink.href);
+      await page.type("input[type=email]", PAYPAL_SANDBOX_EMAIL_1, {
+        delay: 20,
+      });
+      await page.click("button[type=submit]");
+      await page.waitForSelector("input[type=password]", { visible: true });
+      await page.type("input[type=password]", PAYPAL_SANDBOX_EMAIL_1_PASSWORD, {
+        delay: 20,
+      });
+      await page.click("#btnLogin");
+      await page.waitForSelector("#payment-submit-btn", { visible: true });
+      await page.click("#payment-submit-btn");
+      await page.waitForNavigation();
+      await browser.close();
+    })();
+  } else {
+    // I don't want to mock the whole paypal UI, so let's just make a custom request.
+
+    await fetch(`${baseURL.sandbox}/mock/approve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        orderId: orderId,
+        email: PAYPAL_SANDBOX_EMAIL_1,
+        givenName: PAYPAL_SANDBOX_EMAIL_1_GIVEN_NAME,
+        surname: PAYPAL_SANDBOX_EMAIL_1_SURNAME,
+      }),
+    });
+  }
+
+  // Capture the order.
+  const captureUrl = `${baseURL.sandbox}/v2/checkout/orders/${orderId}/capture`;
+  const response2 = await fetch(captureUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const body2 = await response2.json<Paypal.CapturePaymentResponse>();
+  const captureId = body2.purchase_units[0].payments.captures[0].id;
+
+  // Finally, refund the order
+  const refundUrl = `${baseURL.sandbox}/v2/payments/captures/${captureId}/refund`;
+  const response3 = await fetch(refundUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  expect(response3.status).toBe(201);
+  const body3 = await response3.json();
+  expect(body3).toMatchInlineSnapshot(
+    {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      id: expect.stringMatching("[A-Z0-9]+"),
+      links: new Array(2).fill({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        href: expect.stringMatching("https://(www|api).sandbox.paypal.com/.*"),
+      }),
+    },
+    `
+    Object {
+      "id": StringMatching /\\[A-Z0-9\\]\\+/,
+      "links": Array [
+        Object {
+          "href": StringMatching /https:\\\\/\\\\/\\(www\\|api\\)\\.sandbox\\.paypal\\.com\\\\/\\.\\*/,
+          "method": "GET",
+          "rel": "self",
+        },
+        Object {
+          "href": StringMatching /https:\\\\/\\\\/\\(www\\|api\\)\\.sandbox\\.paypal\\.com\\\\/\\.\\*/,
+          "method": "GET",
+          "rel": "up",
+        },
+      ],
+      "status": "COMPLETED",
+    }
+  `
+  );
+}, 30000 /* ms. Increase timout it since we open chrome which could
+            take a while. */);
 
 type PaypalV1Oauth2Token = {
   access_token: string;
