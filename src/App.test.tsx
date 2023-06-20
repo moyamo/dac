@@ -142,13 +142,13 @@ test("App in-progress", async () => {
   fireEvent.click(paypalButton);
   const fundedText = await screen.findByText(/Thank you/i);
   expect(fundedText).toBeInTheDocument();
-  expect(counter).toBe(19);
+  expect(counter).toBe(89);
 });
 
-test("Payment defaults to $19", async () => {
+test("Payment defaults to $89", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
   const amountInput = await screen.findByLabelText("Amount");
-  expect(amountInput).toHaveValue(19);
+  expect(amountInput).toHaveValue(89);
 });
 
 test("Less $5 dollar not accepted", async () => {

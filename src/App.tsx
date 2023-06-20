@@ -37,7 +37,7 @@ function App(props: AppProps) {
   const { PaypalButtons } = props;
   const [funded, setFunded] = React.useState(false);
   const [refunded, setRefunded] = React.useState(false);
-  const [amountRef, setAmount] = useStateRef(19);
+  const [amountRef, setAmount] = useStateRef(89);
   const [progress, setProgress] = React.useState(-1);
   const [fundingGoal, setFundingGoal] = React.useState(-1);
   const [fundingDeadline, setFundingDeadline] = React.useState("");
