@@ -1,0 +1,19 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Worker
+    steps:
+      - uses: actions/checkout@v2
+      - name: Publish
+        uses: cloudflare/wrangler-action@2.0.0
+        with:
+          preCommands: npm install
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          wranglerVersion: "2.17.0"
