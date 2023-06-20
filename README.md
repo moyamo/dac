@@ -82,3 +82,22 @@ context it means our "reverse.spec" is wrong (or the external service is flaky).
 `npm run test` will verify that the mock service is correct by executing the
 "reverse.spec" against it. If a test fails in this context it means our mock is
 wrong.
+
+## Test script
+
+### Project fully funded
+
+1. Fund the project to completion.
+2. The /refund route should return 404.
+3. Wait until deadline passed.
+4. The /refund route should return 404.
+5. No more funds are accepted.
+
+### Project not fully funded.
+
+1. Don't fully fund the project.
+2. The /refund route should return 404.
+3. Wait until the deadline passed.
+4. The /refund route should refund a funder until all funders have been
+   refunded.
+5. No more funds are accepted.
