@@ -9,7 +9,13 @@ import type {
 import React from "react";
 import Countdown from "react-countdown";
 import "./App.css";
-import type { CounterResponse, CreateOrderResponse, Order } from "./worker";
+import type {
+  Bonus,
+  BonusesResponse,
+  CounterResponse,
+  CreateOrderResponse,
+  Order,
+} from "./worker";
 import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
 
 export const WORKER_URL =
@@ -262,6 +268,68 @@ export function formatTime(isoTimeString: string): string {
     `${pad(time.getHours())}:${pad(time.getMinutes())}`
   );
   // return time.toISOString().replace("T", " ").slice(0, "0000-00-00 00:00".length);
+}
+
+export function AdminApp() {
+  return (
+    <>
+      <h1>Admin App</h1>
+      <h2>Pending Payouts</h2>
+      <PendingPayoutsTable />
+    </>
+  );
+}
+
+function PendingPayoutsTable() {
+  const [bonuses, setBonuses] = React.useState<Record<string, Bonus>>({});
+  const [updates, setUpdates] = React.useState(0);
+  React.useEffect(() => {
+    void (async () => {
+      const response = await fetch(WORKER_URL + "/bonuses", {
+        credentials: "include",
+      });
+      const bonuses = await response.json<BonusesResponse>();
+      setBonuses(bonuses.bonuses || {});
+    })();
+  }, [updates]);
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th> Email ({getLocalTimezoneShortName()}) </th>
+          <th> Amount ($) </th>
+          <th> Delete </th>
+        </tr>
+      </thead>
+      <tbody>
+        {Object.entries(bonuses).map(([orderId, bonus]) => (
+          <tr key={orderId}>
+            <td> {bonus.email} </td>
+            <td> {bonus.amount} </td>
+            <td>
+              <button
+                onClick={() =>
+                  void (async () => {
+                    const r = await fetch(`${WORKER_URL}/bonuses/${orderId}`, {
+                      method: "DELETE",
+                      credentials: "include",
+                    });
+                    if (!r.ok) {
+                      alert(`${r.status} ${r.statusText}`);
+                    }
+                    setUpdates((updates) => updates + 1);
+                  })()
+                }
+              >
+                Delete
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 export default App;

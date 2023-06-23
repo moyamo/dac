@@ -24,6 +24,25 @@ export interface Env {
   COUNTER?: DurableObjectNamespace;
   FUNDING_DEADLINE?: string;
   FUNDING_GOAL?: string;
+  ADMIN_PASSWORD?: string;
+}
+
+export function withAdmin(req: Request, env: Env) {
+  const unauthorized = Itty.text("", {
+    status: 401,
+    headers: { "WWW-Authenticate": "Basic" },
+  });
+  if (!env.ADMIN_PASSWORD) return unauthorized;
+  const authorization = req.headers.get("Authorization");
+  if (authorization == null) return unauthorized;
+  const authSplit = authorization.split(" ", 2);
+  if (authSplit[0] != "Basic" || authSplit.length == 1) return unauthorized;
+  const basic = Buffer.from(authSplit[1], "base64").toString("ascii");
+  const basicSplit = basic.split(":", 2);
+  if (basicSplit.length != 2) return unauthorized;
+  const [username, password] = basicSplit;
+  if (username != "admin" || password != env.ADMIN_PASSWORD)
+    return unauthorized;
 }
 
 export default {
@@ -39,8 +58,11 @@ export default {
     if (corsOrigin) {
       const { preflight, corsify } = Itty.createCors({
         origins: [corsOrigin],
-        methods: ["GET", "HEAD", "POST", "OPTIONS", "PATCH"],
+        methods: ["GET", "HEAD", "POST", "OPTIONS", "PATCH", "DELETE"],
         maxAge: 86400,
+        headers: {
+          "Access-Control-Allow-Credentials": true,
+        },
       });
       router.all("*", preflight);
       corsTransform = corsify;
@@ -114,9 +136,24 @@ export default {
       );
     });
 
+    router.get("/bonuses", withAdmin, (req) =>
+      Counter.fromName(env, "demoProject").fetch(req.url, {
+        method: req.method,
+      })
+    );
+
+    router.delete("/bonuses/:orderID", withAdmin, (req) =>
+      Counter.fromName(env, "demoProject").fetch(req.url, {
+        method: req.method,
+      })
+    );
+
     router.all("*", () => Itty.error(404));
 
-    let response = router.handle(request).then(Itty.json).catch(Itty.error);
+    let response = router
+      .handle(request, env)
+      .then(Itty.json)
+      .catch(Itty.error);
     if (corsTransform) {
       response = response.then(corsTransform);
     }
@@ -143,6 +180,15 @@ export type CounterResponse = {
   orders: Order[];
   fundingDeadline: string;
   fundingGoal: number;
+};
+
+export type BonusesResponse = {
+  bonuses: Record<string, Bonus>;
+};
+
+export type Bonus = {
+  email: string;
+  amount: number;
 };
 
 // Durable Object
@@ -175,6 +221,10 @@ export class Counter implements DurableObject {
       captureId: string;
       refunded: boolean;
       amount: number;
+      bonus: {
+        amount: number;
+        refunded: boolean;
+      };
       name: string;
       time: string;
     };
@@ -214,6 +264,10 @@ export class Counter implements DurableObject {
         captureId: body.captureId,
         refunded: false,
         amount: body.amount,
+        bonus: {
+          refunded: false,
+          amount: Number((body.amount * 0.2).toFixed(2)),
+        },
         name: body.name,
         time: body.time,
       };
@@ -257,6 +311,45 @@ export class Counter implements DurableObject {
       if (orderMap[captureToOrder[captureId]].refunded) return Itty.error(404);
 
       orderMap[captureToOrder[captureId]].refunded = true;
+      await this.state.storage.put("orderMap", orderMap);
+      return {};
+    });
+
+    router.get("/bonuses", async () => {
+      if (!hasFundingDeadlinePassed(getFundingDeadline(this.env))) {
+        return Itty.error(404);
+      }
+      const orderMap: OrderMap =
+        (await this.state.storage.get("orderMap")) || {};
+
+      const totalAmount = Object.values(orderMap).reduce(
+        (total, o) => total + o.amount,
+        0
+      );
+      if (totalAmount >= getFundingGoal(this.env)) return Itty.error(404);
+
+      const bonuses = Object.fromEntries(
+        Object.entries(orderMap)
+          .filter(([_orderId, o]) => !o.bonus.refunded)
+          .map(([orderId, o]) => [
+            orderId,
+            { email: o.returnAddress, amount: o.bonus.amount },
+          ])
+      );
+      if (Object.keys(bonuses).length == 0) {
+        return Itty.error(404);
+      }
+      return { bonuses };
+    });
+
+    router.delete("/bonuses/:orderId", async (req) => {
+      const orderId: string = req.params.orderId;
+      const orderMap: OrderMap =
+        (await this.state.storage.get("orderMap")) || {};
+      if (!(orderId in orderMap)) return Itty.error(404);
+      if (orderMap[orderId].bonus.refunded) return Itty.error(404);
+
+      orderMap[orderId].bonus.refunded = true;
       await this.state.storage.put("orderMap", orderMap);
       return {};
     });

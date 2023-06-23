@@ -2,8 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
+import { AdminApp } from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 /* It seems like a client ID is unnecessary, let's just leave it out rather */
 const CLIENT_ID = "test";
@@ -23,7 +25,12 @@ root.render(
      * [1]: https://www.npmjs.com/package/@paypal/react-paypal-js
      */}
     <PayPalScriptProvider options={{ "client-id": CLIENT_ID }}>
-      <App PaypalButtons={PayPalButtons} />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<App PaypalButtons={PayPalButtons} />} />
+          <Route path="/admin" element={<AdminApp />} />
+        </Routes>
+      </BrowserRouter>
     </PayPalScriptProvider>
   </React.StrictMode>
 );

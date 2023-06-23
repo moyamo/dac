@@ -92,6 +92,9 @@ wrong.
 3. Wait until deadline passed.
 4. The /refund route should return 404.
 5. No more funds are accepted.
+6. Navigate to /admin
+7. Type "admin" as username and <ADMIN_PASSWORD> as password.
+8. There should be no bonuses to pay out.
 
 ### Project not fully funded.
 
@@ -101,3 +104,8 @@ wrong.
 4. The /refund route should refund a funder until all funders have been
    refunded.
 5. No more funds are accepted.
+6. Navigate to /admin
+7. Type "admin" as username and <ADMIN_PASSWORD> as password.
+8. There should be a list of bonuses that need to be payed out.
+9. Log-in to paypal and payout the bonuses manually marking them off as you go.
+10. Refresh the /admin page. THe marked off payments should not be visable.

@@ -11,15 +11,18 @@ import App, {
   FunderTable,
   formatTime,
   FundingTimer,
+  AdminApp,
 } from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
 import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
+import type { Bonus } from "./worker";
 
 let counter = 0;
 let refunded = false;
 let pendingAmount: number | null = null;
 let fundingDeadline = "2023-01-01T01:01:01Z";
+let bonuses: Record<string, Bonus> = {};
 beforeEach(() => {
   counter = 0;
   refunded = false;
@@ -27,6 +30,10 @@ beforeEach(() => {
   const future = new Date();
   future.setHours(future.getHours() + 24);
   fundingDeadline = future.toISOString();
+  bonuses = {
+    order1: { email: "bob@example.com", amount: 3 },
+    order2: { email: "sally@place.com", amount: 10 },
+  };
 });
 
 const server = setupServer(
@@ -56,6 +63,14 @@ const server = setupServer(
       throw new Error("Call PATCH before POST");
     }
     counter += pendingAmount;
+    return res(ctx.json(null));
+  }),
+  rest.get(WORKER_URL + "/bonuses", (_req, res, ctx) => {
+    return res(ctx.json({ bonuses: bonuses }));
+  }),
+  rest.delete(WORKER_URL + "/bonuses/:orderId", (req, res, ctx) => {
+    const orderId = req.params["orderId"] as string;
+    delete bonuses[orderId];
     return res(ctx.json(null));
   })
 );
@@ -275,4 +290,24 @@ test("formatTime", () => {
   expect(formatTime(new Date(2023, 0, 3, 23, 24).toISOString())).toBe(
     "2023-01-03 23:24"
   );
+});
+
+test("AdminApp shows bonuses", async () => {
+  render(<AdminApp />);
+  expect(await screen.findByText("bob@example.com")).toBeInTheDocument();
+  expect(await screen.findByText("3")).toBeInTheDocument();
+  expect(await screen.findByText("sally@place.com")).toBeInTheDocument();
+  expect(await screen.findByText("10")).toBeInTheDocument();
+});
+
+test("AdminApp delete works", async () => {
+  render(<AdminApp />);
+  expect(await screen.findByText("bob@example.com")).toBeInTheDocument();
+  expect(await screen.findByText("3")).toBeInTheDocument();
+  const deletes = await screen.findAllByText("Delete");
+  fireEvent.click(deletes[1]);
+  await waitFor(() => {
+    expect(screen.queryByText("bob@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("3")).not.toBeInTheDocument();
+  });
 });

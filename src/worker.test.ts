@@ -18,6 +18,8 @@ import worker, {
   Counter,
   CounterResponse,
   refundCapture,
+  withAdmin,
+  Bonus,
 } from "./worker";
 
 let env: Env;
@@ -52,7 +54,143 @@ describe("generateAccessToken", () => {
   });
 });
 
-describe("Authenticated API", () => {
+describe("withAdmin", () => {
+  it("asks to authenticate when unauthenticated", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const r = withAdmin(new Request("http://localhost/test"), env);
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("does nothing when authenticated", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const encodedUsernameAndPassword = Buffer.from(
+      `admin:correct horse battery staples`
+    ).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    expect(r).toBeUndefined();
+  });
+  it("fails closed on empty password", () => {
+    env.ADMIN_PASSWORD = "";
+    const encodedUsernameAndPassword = Buffer.from(`admin:`).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("fails closed on undefined password", () => {
+    delete env.ADMIN_PASSWORD;
+    const encodedUsernameAndPassword =
+      Buffer.from(`admin:undefined`).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("fails when username is incorrect", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const encodedUsernameAndPassword = Buffer.from(
+      `incorrect_user_name:correct horse battery staples`
+    ).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("fails when password is incorrect", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const encodedUsernameAndPassword = Buffer.from(
+      `admin:incorrect horse battery staples`
+    ).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("fails when authentication header is malformed", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const encodedUsernameAndPassword = Buffer.from(
+      `admin:correct horse battery staples`
+    ).toString("base64");
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `NotBasic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+  it("fails when username and password not encoded properly", () => {
+    env.ADMIN_PASSWORD = "correct horse battery staples";
+    const encodedUsernameAndPassword = `admin:correct horse battery staples`;
+    const r = withAdmin(
+      new Request("http://localhost/test", {
+        headers: { Authorization: `Basic ${encodedUsernameAndPassword}` },
+      }),
+      env
+    );
+    if (typeof r == "undefined") {
+      // help the typechecker out
+      expect(r).toBeDefined();
+    } else {
+      expect(r.status).toBe(401);
+      expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
+    }
+  });
+});
+
+describe("Paypal Authenticated API", () => {
   beforeEach(() => {
     env.PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "valid_client_id";
     env.PAYPAL_APP_SECRET = process.env.PAYPAL_APP_SECRET || "valid_app_secret";
@@ -579,6 +717,111 @@ describe("Authenticated API", () => {
           ctx
         );
         expect(response5.status).toBe(404);
+      });
+    });
+    describe("Admin API", () => {
+      describe("Failing when unauthenticated", () => {
+        it("GET /bonuses", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/bonuses", { method: "GET" }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
+
+        it("DELETE /bonuses/whatever", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/bonuses/whatever", {
+              method: "DELETE",
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
+      });
+      describe("Authenticated", () => {
+        let headers = {};
+        beforeEach(() => {
+          env.ADMIN_PASSWORD = "correct horse battery staples";
+          const encodedUsernameAndPassword = Buffer.from(
+            "admin:correct horse battery staples"
+          ).toString("base64");
+          headers = { Authorization: `Basic ${encodedUsernameAndPassword}` };
+        });
+        it("GET /bonuses", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/contract", {
+              method: "POST",
+              body: JSON.stringify({ amount: 15 }),
+            }),
+            env,
+            ctx
+          );
+          const orderId = (await response.json<Paypal.CreateOrderResponse>())
+            .id;
+
+          await fetch(`${baseURL.sandbox}/mock/approve`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email: "testemail@example.com",
+              orderId: orderId,
+              givenName: "John",
+              surname: "Doe",
+            }),
+          });
+
+          await worker.fetch(
+            new Request(`http://localhost/contract/${orderId}`, {
+              method: "PATCH",
+            }),
+            env,
+            ctx
+          );
+          const response3 = await worker.fetch(
+            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            env,
+            ctx
+          );
+          expect(response3.status).toBe(404);
+          env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+          const response4 = await worker.fetch(
+            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            env,
+            ctx
+          );
+          expect(response4.status).toBe(200);
+          const response4Json = await response4.json<{
+            bonuses: Record<string, Bonus>;
+          }>();
+          expect(Object.keys(response4Json.bonuses)).toHaveLength(1);
+          expect(response4Json.bonuses[orderId].amount).toBe(3);
+          expect(response4Json.bonuses[orderId].email).toBe(
+            "testemail@example.com"
+          );
+
+          const response5 = await worker.fetch(
+            new Request(`http://localhost/bonuses/${orderId}`, {
+              method: "DELETE",
+              headers,
+            }),
+            env,
+            ctx
+          );
+          expect(response5.status).toBe(200);
+          const response6 = await worker.fetch(
+            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            env,
+            ctx
+          );
+          expect(response6.status).toBe(404);
+        });
       });
     });
   });
