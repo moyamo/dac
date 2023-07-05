@@ -14,6 +14,7 @@ jobs:
           preCommands: npm install
           command: publish --keep-vars $([ "$GITHUB_REF_NAME" = "main" ] || echo "--env=$GITHUB_REF_NAME")
           postCommands: >
+            export DISABLE_ESLINT_PLUGIN=true
             export REACT_APP_WORKER_URL=https://dac-"$GITHUB_REF_NAME".yaseen7407.workers.dev;
             [ "$GITHUB_REF_NAME" = "main" ] || (
             npm run build &&
