@@ -15,5 +15,6 @@ jobs:
         uses: cloudflare/wrangler-action@2.0.0
         with:
           preCommands: npm install
+          command: publish --keep-vars
           apiToken: ${{ secrets.CF_API_TOKEN }}
           wranglerVersion: "2.17.0"
