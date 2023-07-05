@@ -20,6 +20,7 @@ import worker, {
   refundCapture,
   withAdmin,
   Bonus,
+  ManualOrdersResponse,
 } from "./worker";
 
 let env: Env;
@@ -288,6 +289,7 @@ describe("Paypal Authenticated API", () => {
         const responseJson = await response.json<CounterResponse>();
         expect(responseJson.amount).toBe(0);
         expect(responseJson.orders).toHaveLength(0);
+        expect(responseJson.lastUpdated).toBe(null);
       });
       it("defaults to a funding deadline in the past when not set", async () => {
         delete env.FUNDING_DEADLINE;
@@ -742,6 +744,39 @@ describe("Paypal Authenticated API", () => {
           expect(response.status).toBe(401);
           expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
         });
+        it("POST /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "POST",
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
+        it("GET /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "GET",
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
+        it("DELETE /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders/whatever", {
+              method: "DELETE",
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
       });
       describe("Authenticated", () => {
         let headers = {};
@@ -801,7 +836,7 @@ describe("Paypal Authenticated API", () => {
             bonuses: Record<string, Bonus>;
           }>();
           expect(Object.keys(response4Json.bonuses)).toHaveLength(1);
-          expect(response4Json.bonuses[orderId].amount).toBe(3);
+          expect(response4Json.bonuses[orderId].amount).toBe(3.75);
           expect(response4Json.bonuses[orderId].email).toBe(
             "testemail@example.com"
           );
@@ -821,6 +856,141 @@ describe("Paypal Authenticated API", () => {
             ctx
           );
           expect(response6.status).toBe(404);
+        });
+        it("POST /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "POST",
+              headers: {
+                ...headers,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                platform: "paypal",
+                userId: "testemail@example.com",
+                name: "John Doe",
+                amount: 25,
+                time: "2023-01-07T02:02:02.000Z",
+              }),
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(201);
+
+          const response2 = await worker.fetch(
+            new Request("http://localhost/counter", { method: "GET" }),
+            env,
+            ctx
+          );
+          const response2Json = await response2.json<CounterResponse>();
+          expect(response2Json.amount).toBe(25);
+          const upToMinute = "XXXX-XX-XXTXX:XX".length;
+          if (response2Json.lastUpdated == null) {
+            expect(response2Json.lastUpdated).not.toBe(null);
+          } else {
+            expect(response2Json.lastUpdated.substring(0, upToMinute)).toBe(
+              new Date().toISOString().substring(0, upToMinute)
+            );
+          }
+          expect(response2Json.orders).toHaveLength(1);
+          expect(response2Json.orders[0].name).toBe("John D.");
+          expect(response2Json.orders[0].amount).toBe(25);
+        });
+        it("GET /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "POST",
+              headers: {
+                ...headers,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                platform: "paypal",
+                userId: "testemail@example.com",
+                name: "John Doe",
+                amount: 25,
+                time: "2023-01-07T02:02:02.000Z",
+              }),
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(201);
+          const orderId = (await response.json<{ orderId: string }>()).orderId;
+
+          const response2 = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "GET",
+              headers: {
+                ...headers,
+              },
+            }),
+            env,
+            ctx
+          );
+          expect(response2.status).toBe(200);
+
+          const response2Json = await response2.json<ManualOrdersResponse>();
+          expect(Object.keys(response2Json)).toHaveLength(1);
+          expect(response2Json.manualOrders[orderId].platform).toBe("paypal");
+          expect(response2Json.manualOrders[orderId].userId).toBe(
+            "testemail@example.com"
+          );
+          expect(response2Json.manualOrders[orderId].name).toBe("John Doe");
+          expect(response2Json.manualOrders[orderId].amount).toBe(25);
+          expect(response2Json.manualOrders[orderId].time).toBe(
+            "2023-01-07T02:02:02.000Z"
+          );
+        });
+        it("DELETE /manualOrders", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/manualOrders", {
+              method: "POST",
+              headers: {
+                ...headers,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                platform: "paypal",
+                userId: "testemail@example.com",
+                name: "John Doe",
+                amount: 25,
+                time: "2023-01-07T02:02:02.000Z",
+              }),
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(201);
+          const orderId = (await response.json<{ orderId: string }>()).orderId;
+          const response2 = await worker.fetch(
+            new Request(`http://localhost/manualOrders/${orderId}`, {
+              method: "DELETE",
+              headers: {
+                ...headers,
+              },
+            }),
+            env,
+            ctx
+          );
+          expect(response2.status).toBe(200);
+          const response3 = await worker.fetch(
+            new Request("http://localhost/counter", { method: "GET" }),
+            env,
+            ctx
+          );
+          const response3Json = await response3.json<CounterResponse>();
+          expect(response3Json.amount).toBe(0);
+          expect(response3Json.orders).toHaveLength(0);
+          const upToMinute = "XXXX-XX-XXTXX:XX".length;
+          if (response3Json.lastUpdated == null) {
+            expect(response3Json.lastUpdated).not.toBe(null);
+          } else {
+            expect(response3Json.lastUpdated.substring(0, upToMinute)).toBe(
+              new Date().toISOString().substring(0, upToMinute)
+            );
+          }
         });
       });
     });

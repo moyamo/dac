@@ -1,11 +1,3 @@
-import { FUNDING, PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
-import type {
-  CreateOrderData,
-  CreateOrderActions,
-  OnApproveData,
-  OnApproveActions,
-  OnClickActions,
-} from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import Countdown from "react-countdown";
 import "./App.css";
@@ -13,51 +5,22 @@ import type {
   Bonus,
   BonusesResponse,
   CounterResponse,
-  CreateOrderResponse,
+  ManualOrder,
+  ManualOrdersResponse,
   Order,
 } from "./worker";
-import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
+import { hasFundingDeadlinePassed } from "./common";
 
 export const WORKER_URL =
   process.env.REACT_APP_WORKER_URL || "http://localhost:8787";
 
-/** The Paypal Button doesn't seem to update it's props based on state
- * changes. Using a Ref works. */
-function useStateRef<T>(
-  defaultValue: T
-): [React.MutableRefObject<T>, (newValue: T) => void] {
-  const [state, setStateInternal] = React.useState(defaultValue);
-  const stateRef = React.useRef(state);
-  function setState(newValue: T) {
-    stateRef.current = newValue;
-    setStateInternal(newValue);
-  }
-  return [stateRef, setState];
-}
-
-export type AppProps = {
-  PaypalButtons: React.FunctionComponent<PayPalButtonsComponentProps>;
-};
-
-function App(props: AppProps) {
-  const { PaypalButtons } = props;
-  const [funded, setFunded] = React.useState(false);
-  const [refunded, setRefunded] = React.useState(false);
-  const [amountRef, setAmount] = useStateRef(89);
+function App() {
   const [progress, setProgress] = React.useState(-1);
   const [fundingGoal, setFundingGoal] = React.useState(-1);
   const [fundingDeadline, setFundingDeadline] = React.useState("");
+  const [lastUpdated, setLastUpdated] = React.useState<string | null>(null);
 
   const [orders, setOrders] = React.useState<Order[]>([]);
-
-  React.useEffect(() => {
-    void (async () => {
-      const refund = await fetch(WORKER_URL + "/refund");
-      if (refund.ok) {
-        setRefunded(true);
-      }
-    })();
-  }, [funded]);
 
   React.useEffect(() => {
     void (async () => {
@@ -67,107 +30,75 @@ function App(props: AppProps) {
       setOrders(response.orders);
       setFundingGoal(response.fundingGoal);
       setFundingDeadline(response.fundingDeadline);
+      setLastUpdated(response.lastUpdated);
     })();
-  }, [funded]);
+  }, []);
 
   return (
     <>
-      <h1>Dominant Assurance Contract Prototype</h1>
+      <h1>
+        <center>Refund Bonus</center>
+      </h1>
+      <hr />
+      <h2>
+        <center>Berkeley House Dinners</center>
+      </h2>
+      <FundingProgressBar
+        funded={false}
+        progress={progress}
+        goal={fundingGoal}
+        lastUpdated={lastUpdated}
+      />
+      <div style={{ margin: "1em 1em" }}>
+        <FundingTimer deadline={fundingDeadline} />
+      </div>
+      <hr />
       <p>
-        This is a prototype of dominant assurance contracts using Paypal&apos;s
-        API with Cloudflare Pages.
+        At <a href="https://twitter.com/andromeda_house">Andromeda House</a> we
+        plan to host large weekly dinners on Monday evenings for the local
+        EA/rationality/etc community at our house in Southside Berkeley.
       </p>
-      {refunded ? (
-        "Sorry, the project did not reach the goal. The money is been refunded"
-      ) : (
+      <p>Here’s how it works:</p>
+      <ul>
+        <li>
+          You can{" "}
+          <a href="https://venmo.com/?txn=pay&audience=public&recipients=Arjun-Panickssery&amount=20&note=dinner">
+            Venmo me
+          </a>{" "}
+          (@Arjun-Panickssery if the link doesn&apos;t work) or{" "}
+          <a href="https://paypal.me/arjunpanickssery">PayPal me</a> any amount
+          of at least $20 with the subject line &quot;dinner&quot; or similar.
+        </li>
+        <li>
+          If I get at least $700 total by noon Pacific time on July 15,
+          I&apos;ll host dinners from July 17 till the end of August (seven
+          dinners).
+        </li>
+
+        <li>
+          If I get less than $700 total, I&apos;ll give you a 25% return (e.g.,
+          if you sent me $100, I&apos;ll send you back $125).
+        </li>
+      </ul>
+      See{" "}
+      <a href="https://www.lesswrong.com/posts/nwjTPtbvcJeA6xDuu/dominant-assurance-contract-experiment-2-berkeley-house">
+        Dominant Assurance Contract Experiment #2: Berkeley House Dinners
+      </a>{" "}
+      for more details.
+      {
         <>
-          <FundingTimer deadline={fundingDeadline} />
           <form>
-            {hasFundingDeadlinePassed(fundingDeadline) ? null : (
-              <>
-                <label htmlFor="amount">Amount</label>
-                <input
-                  type="number"
-                  id="amount"
-                  name="amount"
-                  min="5"
-                  max="500"
-                  value={amountRef.current}
-                  step="1"
-                  onChange={(e) => setAmount(Number(e.target.value))}
-                />
-                <p>
-                  {getInvalidAmountError(amountRef.current) ||
-                    `Thanks for pledging $${
-                      amountRef.current
-                    }! If we do not reach our goal you will get a $${(
-                      amountRef.current * 1.2
-                    ).toFixed(2)} refund!`}
-                </p>
-              </>
-            )}
-            <FundingProgressBar
-              funded={funded}
-              progress={progress}
-              goal={fundingGoal}
-            />
-            {hasFundingDeadlinePassed(fundingDeadline) ? null : (
-              <>
-                <PaypalButtons
-                  fundingSource={
-                    /* Don't allow weird sources, because I may Paypal the money back */
-                    FUNDING.PAYPAL
-                  }
-                  onClick={(_data: unknown, actions: OnClickActions) => {
-                    const amount = amountRef.current;
-                    if (getInvalidAmountError(amount) == null) {
-                      return actions.resolve();
-                    } else {
-                      return actions.reject();
-                    }
-                  }}
-                  createOrder={async (
-                    _data: CreateOrderData,
-                    _actions: CreateOrderActions
-                  ) => {
-                    const response = await fetch(WORKER_URL + "/contract", {
-                      method: "POST",
-                      body: JSON.stringify({ amount: amountRef.current }),
-                    });
-                    const responseJson: CreateOrderResponse =
-                      await response.json();
-                    console.dir(responseJson);
-                    return responseJson.id;
-                  }}
-                  onApprove={async (
-                    data: OnApproveData,
-                    actions: OnApproveActions
-                  ) => {
-                    console.log("order approved");
-                    console.dir(data);
-                    console.log("actions");
-                    console.dir(actions);
-                    const response = await fetch(
-                      WORKER_URL + "/contract/" + data.orderID,
-                      {
-                        method: "PATCH",
-                      }
-                    );
-                    console.log("got response");
-                    console.dir(response);
-                    const responseJson = await response.json();
-                    console.log("responseJson");
-                    console.dir(responseJson);
-                    setFunded(true);
-                  }}
-                />
-              </>
-            )}
+            {hasFundingDeadlinePassed(fundingDeadline) ? null : <></>}
           </form>
-          <h3>Funders</h3>
+          <h3>
+            Funders{" "}
+            <small>
+              <a href="/admin">Edit</a>
+            </small>
+          </h3>
           <FunderTable orders={orders} />
         </>
-      )}
+      }
     </>
   );
 }
@@ -176,18 +107,35 @@ export type FundingProgressBarProps = {
   funded: boolean;
   progress: number;
   goal: number;
+  lastUpdated: string | null;
 };
 
 export function FundingProgressBar(props: FundingProgressBarProps) {
-  const { funded, progress, goal } = props;
+  const { funded, progress, goal, lastUpdated } = props;
   return progress == -1 ? (
     <span>Loading...</span>
   ) : (
-    <>
-      <progress role="progressbar" value={progress} max={goal} />
-      {`$${progress} / $${goal} funded!`}
-      {funded ? " Thank you!" : null}
-    </>
+    <div style={{ margin: "0 1em" }}>
+      <div>
+        <progress
+          style={{ width: "100%", height: "1em" }}
+          role="progressbar"
+          value={progress}
+          max={goal}
+        />
+      </div>
+      <big>
+        {`$${progress} / $${goal} funded!`}
+        {funded ? " Thank you!" : null}{" "}
+      </big>
+      &nbsp;&nbsp;
+      <i>
+        <small>
+          Last Updated:{" "}
+          {lastUpdated == null ? "never" : formatTime(lastUpdated)}
+        </small>
+      </i>
+    </div>
   );
 }
 
@@ -215,10 +163,16 @@ export function FundingTimer(props: FundingTimerProps) {
         ? (Countdown.default as React.FunctionComponent)
         : Countdown;
     return (
-      <span>
-        Funding closing on {formatTime(deadline)}.{" "}
-        <CountdownDefault date={new Date(deadline)} />{" "}
-      </span>
+      <>
+        <p>
+          Funding closing at <b>{formatTime(deadline)}</b>.
+        </p>
+        <center>
+          <span style={{ fontSize: "32px" }}>
+            <CountdownDefault date={new Date(deadline)} />
+          </span>
+        </center>
+      </>
     );
   }
 }
@@ -274,13 +228,15 @@ export function AdminApp() {
   return (
     <>
       <h1>Admin App</h1>
+      <h2>Manual Orders</h2>
+      <ManualOrdersTable />
       <h2>Pending Payouts</h2>
       <PendingPayoutsTable />
     </>
   );
 }
 
-function PendingPayoutsTable() {
+export function PendingPayoutsTable() {
   const [bonuses, setBonuses] = React.useState<Record<string, Bonus>>({});
   const [updates, setUpdates] = React.useState(0);
   React.useEffect(() => {
@@ -297,7 +253,7 @@ function PendingPayoutsTable() {
     <table>
       <thead>
         <tr>
-          <th> Email ({getLocalTimezoneShortName()}) </th>
+          <th> Email </th>
           <th> Amount ($) </th>
           <th> Delete </th>
         </tr>
@@ -329,6 +285,110 @@ function PendingPayoutsTable() {
         ))}
       </tbody>
     </table>
+  );
+}
+
+export function ManualOrdersTable() {
+  const [manualOrders, setManualOrders] = React.useState<
+    Record<string, ManualOrder>
+  >({});
+  const [updates, setUpdates] = React.useState(0);
+  React.useEffect(() => {
+    void (async () => {
+      const response = await fetch(WORKER_URL + "/manualOrders", {
+        credentials: "include",
+      });
+      const r = await response.json<ManualOrdersResponse>();
+      setManualOrders(r.manualOrders || {});
+    })();
+  }, [updates]);
+
+  return (
+    <div>
+      <table>
+        <thead>
+          <tr>
+            <th> Time ({getLocalTimezoneShortName()}) </th>
+            <th>Platform</th>
+            <th> User ID </th>
+            <th> Name </th>
+            <th> Amount ($) </th>
+            <th> Delete </th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(manualOrders).map(([orderId, m]) => (
+            <tr key={orderId}>
+              <td> {formatTime(m.time)}</td>
+              <td> {m.platform} </td>
+              <td> {m.userId} </td>
+              <td> {m.name} </td>
+              <td> {m.amount} </td>
+              <td>
+                <button
+                  onClick={() =>
+                    void (async () => {
+                      const r = await fetch(
+                        `${WORKER_URL}/manualOrders/${orderId}`,
+                        {
+                          method: "DELETE",
+                          credentials: "include",
+                        }
+                      );
+                      if (!r.ok) {
+                        alert(`${r.status} ${r.statusText}`);
+                      }
+                      setUpdates((updates) => updates + 1);
+                    })()
+                  }
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <form
+        role="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const form = e.target as HTMLFormElement;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const body: any = Object.fromEntries(new FormData(form));
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          body["amount"] = Number(body["amount"]);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+          body["time"] = new Date(body["time"]).toISOString();
+          void (async () => {
+            const r = await fetch(`${WORKER_URL}/manualOrders`, {
+              method: "POST",
+              credentials: "include",
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) {
+              alert(`${r.status} ${r.statusText}`);
+            }
+            setUpdates((updates) => updates + 1);
+          })();
+        }}
+      >
+        <label htmlFor="manualOrderTime"> Time </label>
+        <input type="datetime-local" name="time" id="manualOrderTime" />
+        <label htmlFor="manualOrderPlatform"> Platform </label>
+        <select name="platform" id="manualOrderPlatform">
+          <option value="paypal">PayPal</option>
+          <option value="venmo">Venmo</option>
+        </select>
+        <label htmlFor="manualOrderUserId"> User ID </label>
+        <input type="text" name="userId" id="manualOrderUserId" />
+        <label htmlFor="manualOrderName"> Name </label>
+        <input type="text" name="name" id="manualOrderName" />
+        <label htmlFor="manualOrderAmount"> Amount ($) </label>
+        <input type="number" name="amount" id="manualOrderAmount" />
+        <input type="submit" />
+      </form>
+    </div>
   );
 }
 

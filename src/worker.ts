@@ -101,7 +101,14 @@ export default {
       const obj = Counter.fromName(env, "demoProject");
       await obj.fetch(request.url, {
         method: "PUT",
-        body: JSON.stringify({ returnAddress, captureId, amount, name, time }),
+        body: JSON.stringify({
+          platform: "paypal",
+          returnAddress,
+          captureId,
+          amount,
+          name,
+          time,
+        }),
       });
       return response;
     });
@@ -148,6 +155,56 @@ export default {
       })
     );
 
+    router.post("/manualOrders", withAdmin, async (req) => {
+      console.log("Getting uuid");
+      const orderID: string = crypto.randomUUID();
+      console.log("uuid", orderID);
+
+      const jsonBody = await req.json<{
+        userId: string;
+        platform: string;
+        name: string;
+        amount: number;
+        time: string;
+      }>();
+      console.log("jsonBody", jsonBody);
+
+      const platform = jsonBody.platform;
+      const returnAddress = jsonBody.userId;
+      const captureId = orderID;
+      const name = jsonBody.name;
+      const amount = jsonBody.amount;
+      const time = jsonBody.time;
+      console.log("gotstuff");
+
+      const obj = Counter.fromName(env, "demoProject");
+      const url = new URL(req.url);
+      console.log("url");
+      return await obj.fetch(`${url.origin}/contract/${orderID}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          platform,
+          returnAddress,
+          captureId,
+          amount,
+          name,
+          time,
+        }),
+      });
+    });
+
+    router.get("/manualOrders", withAdmin, (req) =>
+      Counter.fromName(env, "demoProject").fetch(req.url, {
+        method: req.method,
+      })
+    );
+
+    router.delete("/manualOrders/:orderID", withAdmin, (req) =>
+      Counter.fromName(env, "demoProject").fetch(req.url, {
+        method: req.method,
+      })
+    );
+
     router.all("*", () => Itty.error(404));
 
     let response = router
@@ -162,6 +219,7 @@ export default {
 };
 
 type PutContractBody = {
+  platform: string;
   returnAddress: string;
   captureId: string;
   amount: number;
@@ -177,6 +235,7 @@ export type Order = {
 
 export type CounterResponse = {
   amount: number;
+  lastUpdated: string | null;
   orders: Order[];
   fundingDeadline: string;
   fundingGoal: number;
@@ -189,6 +248,18 @@ export type BonusesResponse = {
 export type Bonus = {
   email: string;
   amount: number;
+};
+
+export type ManualOrder = {
+  platform: string;
+  userId: string;
+  name: string;
+  amount: number;
+  time: string;
+};
+
+export type ManualOrdersResponse = {
+  manualOrders: Record<string, ManualOrder>;
 };
 
 // Durable Object
@@ -217,6 +288,7 @@ export class Counter implements DurableObject {
     // value in a class member if you prefer.)
 
     type InternalOrder = {
+      platform: string;
       returnAddress: string;
       captureId: string;
       refunded: boolean;
@@ -230,6 +302,7 @@ export class Counter implements DurableObject {
     };
     type OrderMap = { [orderId: string]: InternalOrder };
     const orderMap: OrderMap = (await this.state.storage.get("orderMap")) || {};
+    const lastUpdated = (await this.state.storage.get("lastUpdated")) || null;
 
     const router = Itty.Router();
 
@@ -239,6 +312,7 @@ export class Counter implements DurableObject {
           (total, o) => total + o.amount,
           0
         ),
+        lastUpdated: lastUpdated,
         orders: Object.values(orderMap).map((order) => {
           const names = order.name.split(" ");
           // It's possible that name[1] is a middle name and not a surname, but
@@ -260,20 +334,22 @@ export class Counter implements DurableObject {
       const body = await request.json<PutContractBody>();
       console.log("captureId", body.captureId);
       orderMap[orderId] = {
+        platform: body.platform,
         returnAddress: body.returnAddress,
         captureId: body.captureId,
         refunded: false,
         amount: body.amount,
         bonus: {
           refunded: false,
-          amount: Number((body.amount * 0.2).toFixed(2)),
+          amount: Number((body.amount * 0.25).toFixed(2)),
         },
         name: body.name,
         time: body.time,
       };
       await this.state.storage.put("orderMap", orderMap);
+      await this.state.storage.put("lastUpdated", new Date().toISOString());
       console.log("orderMap", orderMap);
-      return "";
+      return Itty.json({ orderId }, { status: 201 });
     });
 
     router.get("/refunds", async () => {
@@ -312,6 +388,8 @@ export class Counter implements DurableObject {
 
       orderMap[captureToOrder[captureId]].refunded = true;
       await this.state.storage.put("orderMap", orderMap);
+      await this.state.storage.put("lastUpdated", new Date().toISOString());
+
       return {};
     });
 
@@ -351,6 +429,35 @@ export class Counter implements DurableObject {
 
       orderMap[orderId].bonus.refunded = true;
       await this.state.storage.put("orderMap", orderMap);
+      return {};
+    });
+
+    router.get("/manualOrders", () => {
+      return {
+        manualOrders: Object.fromEntries(
+          Object.entries(orderMap).map(([orderId, order]) => [
+            orderId,
+            {
+              platform: order.platform,
+              time: order.time,
+              name: order.name,
+              amount: order.amount,
+              userId: order.returnAddress,
+            },
+          ])
+        ),
+      };
+    });
+
+    router.delete("/manualOrders/:orderId", async (req) => {
+      const orderId: string = req.params.orderId;
+      const orderMap: OrderMap =
+        (await this.state.storage.get("orderMap")) || {};
+      if (!(orderId in orderMap)) return Itty.error(404);
+
+      delete orderMap[orderId];
+      await this.state.storage.put("orderMap", orderMap);
+      await this.state.storage.put("lastUpdated", new Date().toISOString());
       return {};
     });
 
