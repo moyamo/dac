@@ -13,5 +13,11 @@ jobs:
         with:
           preCommands: npm install
           command: publish --keep-vars $([ "$GITHUB_REF_NAME" = "main" ] || echo "--env=$GITHUB_REF_NAME")
+          postCommands: >
+            export REACT_APP_WORKER_URL=https://dac-"$GITHUB_REF_NAME".yaseen7407.workers.dev;
+            [ "$GITHUB_REF_NAME" = "main" ] || (
+            npm run build &&
+            wrangler pages publish build/ --project-name dac-"$GITHUB_REF_NAME";
+            );
           apiToken: ${{ secrets.CF_API_TOKEN }}
           wranglerVersion: "2.17.0"
