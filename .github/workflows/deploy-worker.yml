@@ -1,9 +1,6 @@
 name: Deploy Worker
 
-on:
-  push:
-    branches:
-      - main
+on: push
 
 jobs:
   deploy:
@@ -15,6 +12,6 @@ jobs:
         uses: cloudflare/wrangler-action@2.0.0
         with:
           preCommands: npm install
-          command: publish --keep-vars
+          command: publish --keep-vars $([ "$GITHUB_REF_NAME" = "main" ] || echo "--env=$GITHUB_REF_NAME")
           apiToken: ${{ secrets.CF_API_TOKEN }}
           wranglerVersion: "2.17.0"
