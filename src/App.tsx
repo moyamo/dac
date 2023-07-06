@@ -37,7 +37,10 @@ function App() {
   return (
     <>
       <h1>
-        <center>Refund Bonus</center>
+        <center>
+          Refund Bonus (Demo THIS IS NOT BEING UPDATED. THE METER IS NOT
+          ACCURATE.)
+        </center>
       </h1>
       <hr />
       <h2>
