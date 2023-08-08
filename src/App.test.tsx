@@ -155,7 +155,7 @@ test("App in-progress", async () => {
   await waitFor(() => expect(progressbar).toHaveAttribute("value", "0"));
 
   fireEvent.click(paypalButton);
-  const fundedText = await screen.findByText(/Thank you/i);
+  const fundedText = await screen.findByText(/funded! Thank you!/i);
   expect(fundedText).toBeInTheDocument();
   expect(counter).toBe(89);
 });

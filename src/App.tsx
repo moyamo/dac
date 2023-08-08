@@ -72,11 +72,15 @@ function App(props: AppProps) {
 
   return (
     <>
-      <h1>Dominant Assurance Contract Prototype</h1>
-      <p>
-        This is a prototype of dominant assurance contracts using Paypal&apos;s
-        API with Cloudflare Pages.
-      </p>
+      <h1>
+        <center>Refund Bonus</center>
+      </h1>
+      <hr />
+      <h3>
+        {" "}
+        Yaseen is creating a platform for raising money for giving away products
+        for free{" "}
+      </h3>
       {refunded ? (
         "Sorry, the project did not reach the goal. The money is been refunded"
       ) : (
@@ -164,6 +168,97 @@ function App(props: AppProps) {
               </>
             )}
           </form>
+          <hr />
+          <h3>How to give things away for free and get paid doing it </h3>
+          <p>
+            <i>
+              Imagine a world with no ads or paywalls. A world where
+              Game-of-Thrones-quality shows are freely available on YouTube. A
+              world where open-source software gets the same level of funding as
+              proprietary software. A world where people can freely reuse ideas
+              and music without paying royalties. Is this a fantasy world? No,
+              this is the world where people use this platform.
+            </i>
+          </p>
+          <p>Here is how this works. You give me money.</p>
+          <ul>
+            <li>
+              {" "}
+              If I do not reach the target by the deadline. I will refund
+              everyone. I will also{" "}
+              <em>give a refund bonus of 20% your pledge</em> as a thank you for
+              supporting this project{" "}
+            </li>
+            <li>
+              If I do reach that target by the deadline. I keep all the money
+              and use it to develop a platform that allows you to raise money in
+              the same way (crowdfunding with a refund bonus) to fund your art
+              projects, software projects, etc. &mdash; anything you are willing
+              to give a way for free.
+            </li>
+          </ul>
+          <b>It&apos;s a win-win situation. Why haven&apos;t you pledged?</b>
+          <h4>Details</h4>
+          <p>
+            You&apos;re collectively paying for 1 month of my time to make this
+            idea a reality. I&apos;ll likely ask for additional funding in the
+            future to implement more features after the first month, and for
+            specific expenses as they come up.
+          </p>
+          <p>
+            The plan is to create a website where public-good producers can
+            create a page that
+          </p>
+          <ul>
+            <li>Has a description of the project.</li>
+            <li>Has a progress bar showing how much and who have pledged.</li>
+            <li>Handles payments with PayPal</li>
+            <li>
+              If the project doesn&apos;t reach the funding goal, the customers
+              are automatically refunded with a refund bonus. If the project
+              does reach it&apos;s goal, the producer gets the money in their
+              PayPal account.
+            </li>
+            <li>
+              The producer will put up the refund bonus as collateral using
+              PayPal.
+            </li>
+          </ul>
+          <p>
+            The website is essentially already done. (You are looking at the
+            prototype now!). I just need to flesh it out so that other people
+            can upload their projects. The main thing I&apos;m going to doing is
+            looking for people who want to create public goods and getting
+            feedback from them on the platform (if that&apos;s you please hit me
+            up) [TODO insert contact details] Additionally I want to try some
+            cool things which might not work out like
+          </p>
+          <ul>
+            <li>Use prediction markets to price the project.</li>
+            <li>
+              Bring in investors/advertisers who will put up the collateral on
+              behalf of the producers and take a cut if the project succeeds.
+            </li>
+          </ul>
+          [TODO Link to twitter, discord, or email or something[
+          <h4>
+            &ldquo;Wait, how will giving you money make Game-of-Thrones quality
+            shows on freely available on YouTube?&rdquo;
+          </h4>
+          <p>
+            If you have an idea for a great show, instead of pitching it to
+            holywood executives, you could pitch it to the public and have them
+            crowdfund it. Then after you produce it you give it away for free.{" "}
+          </p>
+          <h4>
+            I have questions or how do I know you are not going to steal my
+            money?
+          </h4>
+          <p>
+            Here is social proof and my contact details ask for questions, and a
+            transparent list of funders
+          </p>
+          <hr />
           <h3>Funders</h3>
           <FunderTable orders={orders} />
         </>
