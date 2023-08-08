@@ -79,14 +79,12 @@ export default {
         return Itty.error(400, { error: "Funding deadline passed" });
       }
       const order = await createOrder(amount.toFixed(2), env);
-      console.log(order);
       return order;
     });
 
     router.patch("/contract/:orderID", async (req) => {
       const orderID: string = req.params.orderID;
       const response = await capturePayment(orderID, env);
-      console.log(JSON.stringify(response, null, 2));
       const returnAddress = response.payment_source.paypal.email_address;
       const captureId = response.purchase_units[0].payments.captures[0].id;
       const name =
@@ -103,7 +101,7 @@ export default {
         method: "PUT",
         body: JSON.stringify({ returnAddress, captureId, amount, name, time }),
       });
-      return response;
+      return Itty.json();
     });
 
     router.get("/counter", async () => {
@@ -258,7 +256,6 @@ export class Counter implements DurableObject {
     router.put("/contract/:orderId", async (req) => {
       const orderId: string = req.params.orderId;
       const body = await request.json<PutContractBody>();
-      console.log("captureId", body.captureId);
       orderMap[orderId] = {
         returnAddress: body.returnAddress,
         captureId: body.captureId,
@@ -272,7 +269,6 @@ export class Counter implements DurableObject {
         time: body.time,
       };
       await this.state.storage.put("orderMap", orderMap);
-      console.log("orderMap", orderMap);
       return "";
     });
 

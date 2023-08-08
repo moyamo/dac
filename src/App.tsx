@@ -140,29 +140,23 @@ function App(props: AppProps) {
                     });
                     const responseJson: CreateOrderResponse =
                       await response.json();
-                    console.dir(responseJson);
                     return responseJson.id;
                   }}
                   onApprove={async (
                     data: OnApproveData,
-                    actions: OnApproveActions
+                    _actions: OnApproveActions
                   ) => {
-                    console.log("order approved");
-                    console.dir(data);
-                    console.log("actions");
-                    console.dir(actions);
                     const response = await fetch(
                       WORKER_URL + "/contract/" + data.orderID,
                       {
                         method: "PATCH",
                       }
                     );
-                    console.log("got response");
-                    console.dir(response);
-                    const responseJson = await response.json();
-                    console.log("responseJson");
-                    console.dir(responseJson);
-                    setFunded(true);
+                    if (response.ok) {
+                      setFunded(true);
+                    } else {
+                      alert(`Error ${response.status} ${response.statusText}`);
+                    }
                   }}
                 />
               </>
