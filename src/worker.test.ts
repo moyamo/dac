@@ -656,71 +656,17 @@ describe("Paypal Authenticated API", () => {
         expect(response3Json.orders[0].amount).toBe(15);
       });
     });
-    describe("/refund", () => {
-      it("POST is initially 404", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/refund", { method: "POST" }),
-          env,
-          ctx
-        );
-        expect(response.status).toBe(404);
-      });
-      it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 15 }),
-          }),
-          env,
-          ctx
-        );
-        const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
-
-        await fetch(`${baseURL.sandbox}/mock/approve`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: "testemail@example.com",
-            orderId: orderId,
-            givenName: "John",
-            surname: "Doe",
-          }),
-        });
-
-        await worker.fetch(
-          new Request(`http://localhost/contract/${orderId}`, {
-            method: "PATCH",
-          }),
-          env,
-          ctx
-        );
-        const response3 = await worker.fetch(
-          new Request("http://localhost/refund", { method: "POST" }),
-          env,
-          ctx
-        );
-        expect(response3.status).toBe(404);
-        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
-        const response4 = await worker.fetch(
-          new Request("http://localhost/refund", { method: "POST" }),
-          env,
-          ctx
-        );
-        expect(response4.status).toBe(201);
-        const response4Json = await response4.json<{ refundId: string }>();
-        expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
-        const response5 = await worker.fetch(
-          new Request("http://localhost/refund", { method: "POST" }),
-          env,
-          ctx
-        );
-        expect(response5.status).toBe(404);
-      });
-    });
     describe("Admin API", () => {
       describe("Failing when unauthenticated", () => {
+        it("POST /refund", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/refund", { method: "POST" }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
         it("GET /bonuses", async () => {
           const response = await worker.fetch(
             new Request("http://localhost/bonuses", { method: "GET" }),
@@ -730,7 +676,6 @@ describe("Paypal Authenticated API", () => {
           expect(response.status).toBe(401);
           expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
         });
-
         it("DELETE /bonuses/whatever", async () => {
           const response = await worker.fetch(
             new Request("http://localhost/bonuses/whatever", {
@@ -751,6 +696,82 @@ describe("Paypal Authenticated API", () => {
             "admin:correct horse battery staples"
           ).toString("base64");
           headers = { Authorization: `Basic ${encodedUsernameAndPassword}` };
+        });
+        describe("/refund", () => {
+          it("POST is initially 404", async () => {
+            const response = await worker.fetch(
+              new Request("http://localhost/refund", {
+                method: "POST",
+                headers,
+              }),
+              env,
+              ctx
+            );
+            expect(response.status).toBe(404);
+          });
+          it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
+            const response = await worker.fetch(
+              new Request("http://localhost/contract", {
+                method: "POST",
+                body: JSON.stringify({ amount: 15 }),
+              }),
+              env,
+              ctx
+            );
+            const orderId = (await response.json<Paypal.CreateOrderResponse>())
+              .id;
+
+            await fetch(`${baseURL.sandbox}/mock/approve`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                email: "testemail@example.com",
+                orderId: orderId,
+                givenName: "John",
+                surname: "Doe",
+              }),
+            });
+
+            await worker.fetch(
+              new Request(`http://localhost/contract/${orderId}`, {
+                method: "PATCH",
+              }),
+              env,
+              ctx
+            );
+            const response3 = await worker.fetch(
+              new Request("http://localhost/refund", {
+                method: "POST",
+                headers,
+              }),
+              env,
+              ctx
+            );
+            expect(response3.status).toBe(404);
+            env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+            const response4 = await worker.fetch(
+              new Request("http://localhost/refund", {
+                method: "POST",
+                headers,
+              }),
+              env,
+              ctx
+            );
+            expect(response4.status).toBe(201);
+            const response4Json = await response4.json<{ refundId: string }>();
+            expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
+            const response5 = await worker.fetch(
+              new Request("http://localhost/refund", {
+                method: "POST",
+                headers,
+              }),
+              env,
+              ctx
+            );
+            expect(response5.status).toBe(404);
+          });
         });
         it("GET /bonuses", async () => {
           const response = await worker.fetch(

@@ -85,16 +85,23 @@ export default {
     router.patch("/contract/:orderID", async (req) => {
       const orderID: string = req.params.orderID;
       const response = await capturePayment(orderID, env);
+      if (response.purchase_units.length != 1)
+        throw new Error(
+          `Expected 1 purchase_unit got ${response.purchase_units.length}`
+        );
+      const purchase_unit = response.purchase_units[0];
+      if (purchase_unit.payments.captures.length != 1)
+        throw new Error(
+          `Expected 1 capture got ${purchase_unit.payments.captures.length}`
+        );
+      const capture = purchase_unit.payments.captures[0];
       const returnAddress = response.payment_source.paypal.email_address;
-      const captureId = response.purchase_units[0].payments.captures[0].id;
+      const captureId = capture.id;
       const name =
         response.payment_source.paypal.name.given_name +
         " " +
         response.payment_source.paypal.name.surname;
-      // TODO Error handling
-      const amount = Number(
-        response.purchase_units[0].payments.captures[0].amount.value
-      );
+      const amount = Number(capture.amount.value);
       const time = new Date().toISOString();
       const obj = Counter.fromName(env, "demoProject");
       await obj.fetch(request.url, {
@@ -111,7 +118,7 @@ export default {
       return count;
     });
 
-    router.post("/refund", async () => {
+    router.post("/refund", withAdmin, async () => {
       const obj = Counter.fromName(env, "demoProject");
       const url = new URL(request.url);
       const refunds = await obj.fetch(`${url.origin}/refunds`);
