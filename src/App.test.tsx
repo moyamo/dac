@@ -162,13 +162,13 @@ test("App in-progress", async () => {
 
 test("Payment defaults to $89", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
-  const amountInput = await screen.findByLabelText("Amount");
+  const amountInput = await screen.findByLabelText("Amount ($)");
   expect(amountInput).toHaveValue(89);
 });
 
 test("Less $5 dollar not accepted", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
-  const amountInput = await screen.findByLabelText("Amount");
+  const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: 4 } });
   expect(await screen.findByText(/at least \$5/i)).toBeInTheDocument();
   const paypalButton = await screen.findByText("PayPal");
@@ -179,7 +179,7 @@ test("Less $5 dollar not accepted", async () => {
 
 test("More than $500 dollar not accepted (too high chance of mistake/fraudelent refund)", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
-  const amountInput = await screen.findByLabelText("Amount");
+  const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: 501 } });
   expect(await screen.findByText(/at most \$500/i)).toBeInTheDocument();
   const paypalButton = await screen.findByText("PayPal");
@@ -190,7 +190,7 @@ test("More than $500 dollar not accepted (too high chance of mistake/fraudelent 
 
 test("Non-numeric amount not accepted", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
-  const amountInput = await screen.findByLabelText("Amount");
+  const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: "not a number" } });
   const paypalButton = await screen.findByText("PayPal");
   fireEvent.click(paypalButton);
@@ -201,7 +201,7 @@ test("Non-numeric amount not accepted", async () => {
 test("Custom amount of $32 dollars accepted", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
   const progressbar = await screen.findByRole("progressbar");
-  const amountInput = await screen.findByLabelText("Amount");
+  const amountInput = await screen.findByLabelText("Amount ($)");
 
   await waitFor(() => expect(progressbar).toHaveAttribute("value", "0"));
 
@@ -218,7 +218,7 @@ test("Funding deadline passed", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
   expect(await screen.findByText(/Funding closed/i)).toBeInTheDocument();
   expect(screen.queryByText("PayPal")).not.toBeInTheDocument();
-  expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Amount ($)")).not.toBeInTheDocument();
 });
 
 test("Funding deadline shown", async () => {

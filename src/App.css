@@ -1,0 +1,32 @@
+header h1 {
+  text-align: center;
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+}
+
+form h2:first-child {
+  margin-top: 0;
+  text-align: center;
+}
+
+form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.funding-progress-bar {
+  margin: 1em 0em;
+}
+
+form {
+  border: 1px solid var(--focus);
+  padding: 1em 1em;
+  margin: 1em 1em;
+}
+
+.funding-countdown {
+  text-align: center;
+  font-size: 2.2em;
+}

@@ -72,24 +72,27 @@ function App(props: AppProps) {
 
   return (
     <>
-      <h1>
-        <center>Refund Bonus</center>
-      </h1>
-      <hr />
-      <h3>
-        {" "}
-        Yaseen is creating a platform for raising money for giving away products
-        for free{" "}
-      </h3>
+      <header>
+        <h1>Refund Bonus</h1>
+      </header>
+
       {refunded ? (
         "Sorry, the project did not reach the goal. The money is been refunded"
       ) : (
         <>
-          <FundingTimer deadline={fundingDeadline} />
           <form>
+            <h2>
+              Yaseen is creating a platform for raising money for giving away
+              products for free
+            </h2>
+            <FundingProgressBar
+              funded={funded}
+              progress={progress}
+              goal={fundingGoal}
+            />
             {hasFundingDeadlinePassed(fundingDeadline) ? null : (
               <>
-                <label htmlFor="amount">Amount</label>
+                <label htmlFor="amount">Amount ($)</label>
                 <input
                   type="number"
                   id="amount"
@@ -100,24 +103,11 @@ function App(props: AppProps) {
                   step="1"
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
-                <p>
-                  {getInvalidAmountError(amountRef.current) ||
-                    `Thanks for pledging $${
-                      amountRef.current
-                    }! If we do not reach our goal you will get a $${(
-                      amountRef.current * 1.2
-                    ).toFixed(2)} refund!`}
-                </p>
-              </>
-            )}
-            <FundingProgressBar
-              funded={funded}
-              progress={progress}
-              goal={fundingGoal}
-            />
-            {hasFundingDeadlinePassed(fundingDeadline) ? null : (
-              <>
                 <PaypalButtons
+                  style={{
+                    label: "pay",
+                    layout: "horizontal",
+                  }}
                   fundingSource={
                     /* Don't allow weird sources, because I may Paypal the money back */
                     FUNDING.PAYPAL
@@ -159,11 +149,22 @@ function App(props: AppProps) {
                     }
                   }}
                 />
+                <p>
+                  {getInvalidAmountError(amountRef.current) || (
+                    <>
+                      {`Thanks for pledging $${amountRef.current}! If we do not reach our goal you will get a`}{" "}
+                      <strong>
+                        {`$${(amountRef.current * 1.2).toFixed(2)}`}
+                      </strong>
+                      {` refund!`}
+                    </>
+                  )}
+                </p>
               </>
             )}
+            <FundingTimer deadline={fundingDeadline} />
           </form>
-          <hr />
-          <h3>How to give things away for free and get paid doing it </h3>
+          <h2>How to give things away for free and get paid doing it </h2>
           <p>
             <i>
               Imagine a world with no ads or paywalls. A world where
@@ -192,7 +193,7 @@ function App(props: AppProps) {
             </li>
           </ul>
           <b>It&apos;s a win-win situation. Why haven&apos;t you pledged?</b>
-          <h4>Details</h4>
+          <h3>Details</h3>
           <p>
             You&apos;re collectively paying for 1 month of my time to make this
             idea a reality. I&apos;ll likely ask for additional funding in the
@@ -235,25 +236,25 @@ function App(props: AppProps) {
             </li>
           </ul>
           [TODO Link to twitter, discord, or email or something[
-          <h4>
+          <h3>
             &ldquo;Wait, how will giving you money make Game-of-Thrones quality
             shows on freely available on YouTube?&rdquo;
-          </h4>
+          </h3>
           <p>
             If you have an idea for a great show, instead of pitching it to
             holywood executives, you could pitch it to the public and have them
             crowdfund it. Then after you produce it you give it away for free.{" "}
           </p>
-          <h4>
+          <h3>
             I have questions or how do I know you are not going to steal my
             money?
-          </h4>
+          </h3>
           <p>
             Here is social proof and my contact details ask for questions, and a
             transparent list of funders
           </p>
           <hr />
-          <h3>Funders</h3>
+          <h2>Funders</h2>
           <FunderTable orders={orders} />
         </>
       )}
@@ -272,11 +273,20 @@ export function FundingProgressBar(props: FundingProgressBarProps) {
   return progress == -1 ? (
     <span>Loading...</span>
   ) : (
-    <>
-      <progress role="progressbar" value={progress} max={goal} />
-      {`$${progress} / $${goal} funded!`}
-      {funded ? " Thank you!" : null}
-    </>
+    <div className="funding-progress-bar">
+      <div>
+        <progress
+          style={{ width: "100%", height: "1em" }}
+          role="progressbar"
+          value={progress}
+          max={goal}
+        />
+      </div>
+      <big>
+        {`$${progress} / $${goal} funded!`}
+        {funded ? " Thank you!" : null}{" "}
+      </big>
+    </div>
   );
 }
 
@@ -304,10 +314,14 @@ export function FundingTimer(props: FundingTimerProps) {
         ? (Countdown.default as React.FunctionComponent)
         : Countdown;
     return (
-      <span>
-        Funding closing on {formatTime(deadline)}.{" "}
-        <CountdownDefault date={new Date(deadline)} />{" "}
-      </span>
+      <>
+        <p>
+          Funding closing at <b>{formatTime(deadline)}</b>.
+        </p>
+        <div className="funding-countdown">
+          <CountdownDefault date={new Date(deadline)} />
+        </div>
+      </>
     );
   }
 }
