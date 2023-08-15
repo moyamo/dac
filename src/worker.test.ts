@@ -13,7 +13,6 @@ import worker, {
   generateAccessToken,
   payout,
   createOrder,
-  baseURL,
   capturePayment,
   Counter,
   CounterResponse,
@@ -28,8 +27,11 @@ beforeEach(() => {
   env = getMiniflareBindings();
 });
 
+let paypalMockUrl: string;
 beforeEach(() => {
   paypalMock();
+  paypalMockUrl = "https://api-m.sandbox.paypal.com";
+  env.PAYPAL_API_URL = paypalMockUrl;
 });
 
 describe("generateAccessToken", () => {
@@ -229,7 +231,7 @@ describe("Paypal Authenticated API", () => {
       const response = await createOrder("10.00", env);
       const orderId = response.id;
       // Mock user approving charge
-      await fetch(`${baseURL.sandbox}/mock/approve`, {
+      await fetch(`${paypalMockUrl}/mock/approve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -257,7 +259,7 @@ describe("Paypal Authenticated API", () => {
       const response = await createOrder("10.00", env);
       const orderId = response.id;
       // Mock user approving charge
-      await fetch(`${baseURL.sandbox}/mock/approve`, {
+      await fetch(`${paypalMockUrl}/mock/approve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -624,7 +626,7 @@ describe("Paypal Authenticated API", () => {
         );
         const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
 
-        await fetch(`${baseURL.sandbox}/mock/approve`, {
+        await fetch(`${paypalMockUrl}/mock/approve`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -721,7 +723,7 @@ describe("Paypal Authenticated API", () => {
             const orderId = (await response.json<Paypal.CreateOrderResponse>())
               .id;
 
-            await fetch(`${baseURL.sandbox}/mock/approve`, {
+            await fetch(`${paypalMockUrl}/mock/approve`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -785,7 +787,7 @@ describe("Paypal Authenticated API", () => {
           const orderId = (await response.json<Paypal.CreateOrderResponse>())
             .id;
 
-          await fetch(`${baseURL.sandbox}/mock/approve`, {
+          await fetch(`${paypalMockUrl}/mock/approve`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

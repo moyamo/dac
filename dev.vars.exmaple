@@ -1,3 +1,5 @@
+# Remove "sandbox" in production
+PAYPAL_API_URL=https://api-m.sandbox.paypal.com
 PAYPAL_CLIENT_ID=blahblahblah
 PAYPAL_APP_SECRET=blahblahblah
 # Since the frontend and backend are on different origins,

@@ -18,6 +18,7 @@ import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
 // There doesn't seem to be any compile time check that these env vars will
 // correspond at runtime to what is declare here, so putting `?` is necessary.
 export interface Env {
+  PAYPAL_API_URL?: string;
   PAYPAL_CLIENT_ID?: string;
   PAYPAL_APP_SECRET?: string;
   FRONTEND_URL?: string;
@@ -378,11 +379,6 @@ function getFundingGoal(env: Env): number {
 // For a fully working example, please see:
 // https://github.com/paypal-examples/docs-examples/tree/main/standard-integration
 
-export const baseURL = {
-  sandbox: "https://api-m.sandbox.paypal.com",
-  production: "https://api-m.paypal.com",
-};
-
 /// ///////////////////
 // PayPal API helpers
 /// ///////////////////
@@ -396,8 +392,10 @@ export async function createOrder(
   amountUsd: string,
   env: Env
 ): Promise<CreateOrderResponse> {
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
   const accessToken = await generateAccessToken(env);
-  const url = `${baseURL.sandbox}/v2/checkout/orders`;
+  const url = `${env.PAYPAL_API_URL}/v2/checkout/orders`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -425,8 +423,10 @@ export async function capturePayment(
   orderId: string,
   env: Env
 ): Promise<Paypal.CapturePaymentResponse> {
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
   const accessToken = await generateAccessToken(env);
-  const url = `${baseURL.sandbox}/v2/checkout/orders/${orderId}/capture`;
+  const url = `${env.PAYPAL_API_URL}/v2/checkout/orders/${orderId}/capture`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -449,8 +449,10 @@ export async function payout(
   batch_id: string,
   user_emails: string[]
 ) {
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
   const accessToken = await generateAccessToken(env);
-  const url = `${baseURL.sandbox}/v1/payments/payouts`;
+  const url = `${env.PAYPAL_API_URL}/v1/payments/payouts`;
   const amount = "22.80"; // 19 * 120%
   const max_digit = 5; // at most 15000 payments in a single payout
   const response = await fetch(url, {
@@ -493,8 +495,10 @@ export async function refundCapture(
   captureId: string,
   env: Env
 ): Promise<Paypal.RefundCaptureResponse> {
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
   const accessToken = await generateAccessToken(env);
-  const url = `${baseURL.sandbox}/v2/payments/captures/${captureId}/refund`;
+  const url = `${env.PAYPAL_API_URL}/v2/payments/captures/${captureId}/refund`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -508,16 +512,17 @@ export async function refundCapture(
 
 // generate an access token using client id and app secret
 export async function generateAccessToken(env: Env): Promise<string> {
-  if (
-    typeof env.PAYPAL_CLIENT_ID == "undefined" ||
-    typeof env.PAYPAL_APP_SECRET == "undefined"
-  ) {
-    throw new TypeError("PAYPAL_CLIENT_ID or PAYPAL_APP_SECRET is void");
-  }
+  if (typeof env.PAYPAL_CLIENT_ID == "undefined")
+    throw new TypeError("PAYPAL_CLIENT_ID is undefined");
+  if (typeof env.PAYPAL_APP_SECRET == "undefined")
+    throw new TypeError("PAYPAL_APP_SECRET is undefined");
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
+
   const auth = Buffer.from(
     env.PAYPAL_CLIENT_ID + ":" + env.PAYPAL_APP_SECRET
   ).toString("base64");
-  const response = await fetch(`${baseURL.sandbox}/v1/oauth2/token`, {
+  const response = await fetch(`${env.PAYPAL_API_URL}/v1/oauth2/token`, {
     method: "POST",
     body: "grant_type=client_credentials",
     headers: {

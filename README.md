@@ -29,9 +29,12 @@ information.
 
 ### Cloudflare Pages
 
-It should automatically deploy when pushing to the `main` branch. You will need
-to set the environment variable `REACT_APP_WORKER_URL` to the URL of the
-deployed worker during build time.
+It should automatically deploy when pushing to the `main` branch. During build
+time, you need to set the environment variables
+
+- `REACT_APP_WORKER_URL` the the URL of the deployed worker, and
+- `REACT_APP_PAYPAL_CLIENT_ID` to your Paypal Client ID. It should be the same as
+  the one set in the worker.
 
 ### Cloudflare Workers
 
