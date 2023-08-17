@@ -26,6 +26,7 @@ export interface Env {
   FUNDING_DEADLINE?: string;
   FUNDING_GOAL?: string;
   ADMIN_PASSWORD?: string;
+  PROJECT_ID?: string;
 }
 
 export function withAdmin(req: Request, env: Env) {
@@ -69,6 +70,8 @@ export default {
       corsTransform = corsify;
     }
 
+    const projectId = env.PROJECT_ID || "demoProject";
+
     router.post("/contract", async (req) => {
       const jsonBody = await req.json<{ amount: number }>();
       const amount = Number(jsonBody.amount.toFixed(2));
@@ -104,7 +107,7 @@ export default {
         response.payment_source.paypal.name.surname;
       const amount = Number(capture.amount.value);
       const time = new Date().toISOString();
-      const obj = Counter.fromName(env, "demoProject");
+      const obj = Counter.fromName(env, projectId);
       await obj.fetch(request.url, {
         method: "PUT",
         body: JSON.stringify({ returnAddress, captureId, amount, name, time }),
@@ -113,14 +116,14 @@ export default {
     });
 
     router.get("/counter", async () => {
-      const obj = Counter.fromName(env, "demoProject");
+      const obj = Counter.fromName(env, projectId);
       const resp = await obj.fetch(request.url, { method: "GET" });
       const count = await resp.json<number>();
       return count;
     });
 
     router.post("/refund", withAdmin, async () => {
-      const obj = Counter.fromName(env, "demoProject");
+      const obj = Counter.fromName(env, projectId);
       const url = new URL(request.url);
       const refunds = await obj.fetch(`${url.origin}/refunds`);
       if (!refunds.ok) {
@@ -143,13 +146,13 @@ export default {
     });
 
     router.get("/bonuses", withAdmin, (req) =>
-      Counter.fromName(env, "demoProject").fetch(req.url, {
+      Counter.fromName(env, projectId).fetch(req.url, {
         method: req.method,
       })
     );
 
     router.delete("/bonuses/:orderID", withAdmin, (req) =>
-      Counter.fromName(env, "demoProject").fetch(req.url, {
+      Counter.fromName(env, projectId).fetch(req.url, {
         method: req.method,
       })
     );
