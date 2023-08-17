@@ -160,6 +160,21 @@ test("App in-progress", async () => {
   expect(counter).toBe(89);
 });
 
+test("headerParenthesis", async () => {
+  render(
+    <App PaypalButtons={MockPaypalButtons} headerParenthesis="header paren" />
+  );
+  expect(
+    await screen.findByText("Refund Bonus (header paren)")
+  ).toBeInTheDocument();
+});
+
+test("headerParenthesis empty", async () => {
+  render(<App PaypalButtons={MockPaypalButtons} />);
+  expect(await screen.findByText("Refund Bonus")).toBeInTheDocument();
+  expect(screen.queryByText("Refund Bonus ()")).not.toBeInTheDocument();
+});
+
 test("Payment defaults to $89", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
   const amountInput = await screen.findByLabelText("Amount ($)");

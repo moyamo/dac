@@ -10,6 +10,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 export const PAYPAL_CLIENT_ID =
   process.env.REACT_APP_PAYPAL_CLIENT_ID || "test";
 
+export const HEADER_PARENTHESIS =
+  process.env.REACT_APP_HEADER_PARENTHESIS || "";
+
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
@@ -27,7 +30,15 @@ root.render(
     <PayPalScriptProvider options={{ "client-id": PAYPAL_CLIENT_ID }}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App PaypalButtons={PayPalButtons} />} />
+          <Route
+            path="/"
+            element={
+              <App
+                PaypalButtons={PayPalButtons}
+                headerParenthesis={HEADER_PARENTHESIS}
+              />
+            }
+          />
           <Route path="/admin" element={<AdminApp />} />
         </Routes>
       </BrowserRouter>

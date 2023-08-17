@@ -37,10 +37,11 @@ function useStateRef<T>(
 
 export type AppProps = {
   PaypalButtons: React.FunctionComponent<PayPalButtonsComponentProps>;
+  headerParenthesis?: string;
 };
 
 function App(props: AppProps) {
-  const { PaypalButtons } = props;
+  const { PaypalButtons, headerParenthesis } = props;
   const [funded, setFunded] = React.useState(false);
   const [refunded, setRefunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(89);
@@ -73,7 +74,9 @@ function App(props: AppProps) {
   return (
     <>
       <header>
-        <h1>Refund Bonus</h1>
+        <h1>{`Refund Bonus${
+          headerParenthesis ? ` (${headerParenthesis})` : ""
+        }`}</h1>
       </header>
 
       {refunded ? (

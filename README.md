@@ -35,6 +35,11 @@ time, you need to set the environment variables
 - `REACT_APP_WORKER_URL` the the URL of the deployed worker, and
 - `REACT_APP_PAYPAL_CLIENT_ID` to your Paypal Client ID. It should be the same as
   the one set in the worker.
+- `REACT_APP_HEADER_PARENTHESIS` (optional) specify text that appears in
+  parenthesized in the website header. This is useful for distinguishing testing
+  from production. e.g. `REACT_APP_HEADER_PARENTHESIS="test site"` will render in
+  the header "Refund Bonus (test site)", `REACT_APP_HEADER_PARENTHESIS=""`
+  renders as "Refund Bonus".
 
 ### Cloudflare Workers
 
