@@ -208,54 +208,104 @@ function App(props: AppProps) {
             create a page that
           </p>
           <ul>
-            <li>Has a description of the project.</li>
-            <li>Has a progress bar showing how much and who have pledged.</li>
-            <li>Handles payments with PayPal</li>
+            <li>will have a description of the project,</li>
             <li>
-              If the project doesn&apos;t reach the funding goal, the customers
-              are automatically refunded with a refund bonus. If the project
-              does reach it&apos;s goal, the producer gets the money in their
-              PayPal account.
+              will have a progress bar showing how much and who have pledged,
+              and
+            </li>
+            <li>will handle payments with PayPal.</li>
+            <li>
+              If the project doesn&apos;t reach its funding goal, then the
+              customers will be automatically refunded (with a refund bonus). If
+              the project does reach its goal, then the public-good producer
+              will receive the funding in their PayPal account.
             </li>
             <li>
-              The producer will put up the refund bonus as collateral using
-              PayPal.
+              The public-good producer will put up the refund bonus as
+              collateral using PayPal.
             </li>
           </ul>
           <p>
             The website is essentially already done. (You are looking at the
-            prototype now!). I just need to flesh it out so that other people
-            can upload their projects. The main thing I&apos;m going to doing is
-            looking for people who want to create public goods and getting
-            feedback from them on the platform (if that&apos;s you please hit me
-            up) [TODO insert contact details] Additionally I want to try some
-            cool things which might not work out like
+            prototype now!). It just needs to be fleshed it out to allow other
+            public-good producers to upload their projects. Really, what I
+            actually want to do is find people who want to create public goods
+            and get feedback from them (if that&apos;s you please{" "}
+            <a href="#contact"> join our discord or contact me</a>). I may try
+            some additional cool things, such as
           </p>
           <ul>
-            <li>Use prediction markets to price the project.</li>
+            <li>using prediction markets to price projects, or</li>
             <li>
-              Bring in investors/advertisers who will put up the collateral on
-              behalf of the producers and take a cut if the project succeeds.
+              bringing in investors/advertisers who will put up the collateral
+              on behalf of the producers and who will take a cut if the project
+              succeeds.
             </li>
           </ul>
-          [TODO Link to twitter, discord, or email or something[
           <h3>
-            &ldquo;Wait, how will giving you money make Game-of-Thrones quality
-            shows on freely available on YouTube?&rdquo;
+            &ldquo;I don&apos;t believe you. How will giving you money make
+            Game-of-Thrones quality shows on freely available on YouTube?&rdquo;
           </h3>
           <p>
             If you have an idea for a great show, instead of pitching it to
             holywood executives, you could pitch it to the public and have them
-            crowdfund it. Then after you produce it you give it away for free.{" "}
+            crowdfund it. Then after you produce it, you give it away for free.{" "}
           </p>
           <h3>
-            I have questions or how do I know you are not going to steal my
-            money?
+            &ldquo;I have questions,&rdquo; or &ldquo;I don&apos;t trust
+            you.&rdquo;
           </h3>
           <p>
-            Here is social proof and my contact details ask for questions, and a
-            transparent list of funders
+            You can check out my social media below. The list of funders and the
+            time they funded is also listed below so can check that I&apos;m not
+            cheating.
           </p>
+          <div id="contact">
+            <h2> Yaseen Mowzer </h2>
+            <img
+              id="portrait"
+              src="/yaseen-portrait.jpg"
+              width="128"
+              height="128"
+            ></img>
+            <div id="contact-content">
+              <p>
+                Yaseen is a Software Developer with over 3 years of industry
+                experience. You can{" "}
+              </p>
+              <ul>
+                <li>
+                  follow me for updates{" "}
+                  <a href="https://twitter.com/Moyamodehacker">
+                    @moyamodehacker
+                  </a>
+                </li>
+                <li>
+                  join us on the{" "}
+                  <a href="https://discord.gg/KGeCTx33g">
+                    Refund Bonus Discord
+                  </a>
+                </li>
+                <li>
+                  email me at{" "}
+                  <a href="mailto:yaseen@mowzer.co.za">yaseen@mowzer.co.za</a>
+                </li>
+
+                <li>
+                  verify that I&apos;m a real person on{" "}
+                  <a href="https://www.linkedin.com/in/yaseen-mowzer-389938165/">
+                    Linked in
+                  </a>
+                </li>
+                <li>
+                  fork this website on{" "}
+                  <a href="https://github.com/moyamo/dac">
+                    github.com/moyamo/dac
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
           <hr />
           <h2>Funders</h2>
           <FunderTable orders={orders} />
