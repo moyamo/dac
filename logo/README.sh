@@ -9,7 +9,8 @@ pdflatex logo.tex
 # See https://stackoverflow.com/questions/12179342/imagemagick-extend-canvas-with-transparent-background
 FAVICON_INPUT="logo.pdf"
 FAVICON_OUTPUT="../public/favicon.ico"
-convert "$FAVICON_INPUT" -gravity center -background none \
+convert -density 10080 "$FAVICON_INPUT" \
+      -gravity center -background none \
       \( -clone 0 -resize 16x16 -extent 16x16 \) \
       \( -clone 0 -resize 32x32 -extent 32x32 \) \
       \( -clone 0 -resize 48x48 -extent 48x48 \) \
