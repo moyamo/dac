@@ -227,7 +227,7 @@ function App(props: AppProps) {
           </ul>
           <p>
             The website is essentially already done. (You are looking at the
-            prototype now!). It just needs to be fleshed it out to allow other
+            prototype now!). It just needs to be fleshed out to allow other
             public-good producers to upload their projects. Really, what I
             actually want to do is find people who want to create public goods
             and get feedback from them (if that&apos;s you please{" "}
