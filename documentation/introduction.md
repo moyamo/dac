@@ -8,7 +8,9 @@ https://mason.gmu.edu/~atabarro/PrivateProvision.pdf
 Mowzer: 
 
 https://www.lesswrong.com/posts/CwgHX9tbfASqxjpsc/the-economics-of-the-asteroid-deflection-problem
+
 https://dac.mowzer.co.za/
+
 
 It is much better explained above, but a very short introduction is: 
 
