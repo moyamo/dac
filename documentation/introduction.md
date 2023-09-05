@@ -27,13 +27,13 @@ Note that in this framework the contract does not mean "build a road", the contr
 
 **Producer** - The person who offers the Contract.
 
-**Consumer** - A person, one of many presumably, who choose to accept (fund) or reject the contract.
+**Consumer** - A person, one of many presumably, who choose to Accept (fund) or Reject the Contract.
 
-**Accept** - An individual Consumer chooses to fund the contract.
+**Accept** - When an individual Consumer chooses to fund the Contract by Pledging an amount to the Contract.
 
-**Reject** - An individual Consumer chooses to reject the contract.
+**Reject** - When an individual Consumer chooses to not fund the Contract.
 
-**Refund Bonus** - A payoff given by the Producer to a Consumer who has Accepted a Contract that Fails. To be clear, if the Pledge is $100, and the Refund Bonus is $5, the Consumer does not forfeit $100 and get $5 back as a Refund Bonus, they forfeit nothing and profit $5 with the Refund Bonus.
+**Refund Bonus** - A payoff given by the Producer to a Consumer who has Accepted a Contract that Fails. To be clear, if the Pledge is $100, and the Refund Bonus is $5 the Consumer does not forfeit $100 and get $5 back as a Refund Bonus, instead they forfeit nothing and profit $5 with the Refund Bonus.
 
 **Pledge** - A payment given by a Consumer to the Producer if the Consumer has Accepted a Contract and the Contract Succeeds.
 
