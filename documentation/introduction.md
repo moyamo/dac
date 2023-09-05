@@ -1,9 +1,12 @@
 # Introduction
 The original ideas come from Alex Tabarrok and Yaseen Mowzer
+
 Tabarrok: 
+
 https://mason.gmu.edu/~atabarro/PrivateProvision.pdf
 
 Mowzer: 
+
 https://www.lesswrong.com/posts/CwgHX9tbfASqxjpsc/the-economics-of-the-asteroid-deflection-problem
 https://dac.mowzer.co.za/
 
