@@ -43,22 +43,12 @@ export type AppProps = {
 function App(props: AppProps) {
   const { PaypalButtons, headerParenthesis } = props;
   const [funded, setFunded] = React.useState(false);
-  const [refunded, setRefunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(89);
   const [progress, setProgress] = React.useState(-1);
   const [fundingGoal, setFundingGoal] = React.useState(-1);
   const [fundingDeadline, setFundingDeadline] = React.useState("");
 
   const [orders, setOrders] = React.useState<Order[]>([]);
-
-  React.useEffect(() => {
-    void (async () => {
-      const refund = await fetch(WORKER_URL + "/refund");
-      if (refund.ok) {
-        setRefunded(true);
-      }
-    })();
-  }, [funded]);
 
   React.useEffect(() => {
     void (async () => {
@@ -79,9 +69,7 @@ function App(props: AppProps) {
         }`}</h1>
       </header>
 
-      {refunded ? (
-        "Sorry, the project did not reach the goal. The money is been refunded"
-      ) : (
+      {
         <>
           <form>
             <h2>
@@ -310,7 +298,7 @@ function App(props: AppProps) {
           <h2>Funders</h2>
           <FunderTable orders={orders} />
         </>
-      )}
+      }
     </>
   );
 }

@@ -19,13 +19,11 @@ import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
 import type { Bonus } from "./worker";
 
 let counter = 0;
-let refunded = false;
 let pendingAmount: number | null = null;
 let fundingDeadline = "2023-01-01T01:01:01Z";
 let bonuses: Record<string, Bonus> = {};
 beforeEach(() => {
   counter = 0;
-  refunded = false;
   pendingAmount = null;
   const future = new Date();
   future.setHours(future.getHours() + 24);
@@ -46,9 +44,6 @@ const server = setupServer(
         fundingDeadline: fundingDeadline,
       })
     );
-  }),
-  rest.get(WORKER_URL + "/refund", (_req, res, ctx) => {
-    return refunded ? res() : res(ctx.status(404));
   }),
   rest.post(WORKER_URL + "/contract", async (req, res, ctx) => {
     const jsonBody = await req.json<{ amount: number }>();
@@ -137,15 +132,6 @@ function MockPaypalButtons(props: PayPalButtonsComponentProps) {
     </button>
   );
 }
-
-test("App refunded", async () => {
-  refunded = true;
-  render(<App PaypalButtons={MockPaypalButtons} />);
-  const refundText = await screen.findByText(
-    /the project did not reach the goal/i
-  );
-  expect(refundText).toBeInTheDocument();
-});
 
 test("App in-progress", async () => {
   render(<App PaypalButtons={MockPaypalButtons} />);
