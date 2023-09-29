@@ -26,10 +26,9 @@ export interface Env {
   FUNDING_DEADLINE?: string;
   FUNDING_GOAL?: string;
   ADMIN_PASSWORD?: string;
-  PROJECT_ID?: string;
 }
 
-export function withAdmin(req: Request, env: Env) {
+export function withAdmin<R extends Request>(req: R, env: Env) {
   const unauthorized = Itty.text("", {
     status: 401,
     headers: { "WWW-Authenticate": "Basic" },
@@ -70,9 +69,7 @@ export default {
       corsTransform = corsify;
     }
 
-    const projectId = env.PROJECT_ID || "demoProject";
-
-    router.post("/contract", async (req) => {
+    router.post("/projects/:projectId/contract", async (req) => {
       const jsonBody = await req.json<{ amount: number }>();
       const amount = Number(jsonBody.amount.toFixed(2));
       const error = getInvalidAmountError(amount);
@@ -86,8 +83,10 @@ export default {
       return order;
     });
 
-    router.patch("/contract/:orderID", async (req) => {
-      const orderID: string = req.params.orderID;
+    router.patch("/projects/:projectId/contract/:orderID", async (req) => {
+      const origin = new URL(req.url).origin;
+      const orderID = req.params.orderID;
+      const projectId = req.params.projectId;
       const response = await capturePayment(orderID, env);
       if (response.purchase_units.length != 1)
         throw new Error(
@@ -108,21 +107,24 @@ export default {
       const amount = Number(capture.amount.value);
       const time = new Date().toISOString();
       const obj = Counter.fromName(env, projectId);
-      await obj.fetch(request.url, {
+      await obj.fetch(`${origin}/contract/${orderID}`, {
         method: "PUT",
         body: JSON.stringify({ returnAddress, captureId, amount, name, time }),
       });
       return Itty.json();
     });
 
-    router.get("/counter", async () => {
+    router.get("/projects/:projectId/counter", async (req) => {
+      const origin = new URL(req.url).origin;
+      const projectId = req.params.projectId;
       const obj = Counter.fromName(env, projectId);
-      const resp = await obj.fetch(request.url, { method: "GET" });
+      const resp = await obj.fetch(`${origin}/counter`, { method: "GET" });
       const count = await resp.json<number>();
       return count;
     });
 
-    router.post("/refund", withAdmin, async () => {
+    router.post("/projects/:projectId/refund", withAdmin, async (req) => {
+      const projectId: string = req.params.projectId;
       const obj = Counter.fromName(env, projectId);
       const url = new URL(request.url);
       const refunds = await obj.fetch(`${url.origin}/refunds`);
@@ -145,17 +147,25 @@ export default {
       );
     });
 
-    router.get("/bonuses", withAdmin, (req) =>
-      Counter.fromName(env, projectId).fetch(req.url, {
+    router.get("/projects/:projectId/bonuses", withAdmin, (req) => {
+      const origin = new URL(req.url).origin;
+      const projectId = req.params.projectId;
+      return Counter.fromName(env, projectId).fetch(`${origin}/bonuses`, {
         method: req.method,
-      })
-    );
+      });
+    });
 
-    router.delete("/bonuses/:orderID", withAdmin, (req) =>
-      Counter.fromName(env, projectId).fetch(req.url, {
-        method: req.method,
-      })
-    );
+    router.delete("/projects/:projectId/bonuses/:orderID", withAdmin, (req) => {
+      const origin = new URL(req.url).origin;
+      const projectId = req.params.projectId;
+      const orderID = req.params.orderID;
+      return Counter.fromName(env, projectId).fetch(
+        `${origin}/bonuses/${orderID}`,
+        {
+          method: req.method,
+        }
+      );
+    });
 
     router.all("*", () => Itty.error(404));
 

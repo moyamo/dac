@@ -5,7 +5,13 @@ import App from "./App";
 import { AdminApp } from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useNavigate,
+  Link,
+} from "react-router-dom";
 
 export const PAYPAL_CLIENT_ID =
   process.env.REACT_APP_PAYPAL_CLIENT_ID || "test";
@@ -30,21 +36,32 @@ root.render(
     <PayPalScriptProvider options={{ "client-id": PAYPAL_CLIENT_ID }}>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element=<RedirectToDemo /> />
           <Route
-            path="/"
-            element={
-              <App
-                PaypalButtons={PayPalButtons}
-                headerParenthesis={HEADER_PARENTHESIS}
-              />
-            }
+            path="/projects/:project"
+            element=<App
+              PaypalButtons={PayPalButtons}
+              headerParenthesis={HEADER_PARENTHESIS}
+            />
           />
-          <Route path="/admin" element={<AdminApp />} />
+          <Route path="/projects/:project/admin" element=<AdminApp /> />
         </Routes>
       </BrowserRouter>
     </PayPalScriptProvider>
   </React.StrictMode>
 );
+
+function RedirectToDemo() {
+  const navigate = useNavigate();
+  const toUrl = "/projects/dac2023w35production";
+
+  React.useEffect(() => navigate(toUrl, { replace: true }));
+  return (
+    <>
+      You will be redirected shortly to <Link to={toUrl}>{toUrl}</Link>
+    </>
+  );
+}
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

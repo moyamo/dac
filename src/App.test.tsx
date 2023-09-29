@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import * as ReactRouterDom from "react-router-dom";
 import type {
   CreateOrderData,
   CreateOrderActions,
@@ -35,7 +36,7 @@ beforeEach(() => {
 });
 
 const server = setupServer(
-  rest.get(WORKER_URL + "/counter", (_req, res, ctx) => {
+  rest.get(WORKER_URL + "/projects/test/counter", (_req, res, ctx) => {
     return res(
       ctx.json({
         amount: counter,
@@ -45,29 +46,35 @@ const server = setupServer(
       })
     );
   }),
-  rest.post(WORKER_URL + "/contract", async (req, res, ctx) => {
+  rest.post(WORKER_URL + "/projects/test/contract", async (req, res, ctx) => {
     const jsonBody = await req.json<{ amount: number }>();
     pendingAmount = jsonBody.amount;
     return res(ctx.json({ id: "random_order_id" }));
   }),
-  rest.patch(WORKER_URL + "/contract/:orderId", (req, res, ctx) => {
-    if (req.params["orderId"] !== "random_order_id") {
-      throw new Error("Invalid order id");
+  rest.patch(
+    WORKER_URL + "/projects/test/contract/:orderId",
+    (req, res, ctx) => {
+      if (req.params["orderId"] !== "random_order_id") {
+        throw new Error("Invalid order id");
+      }
+      if (pendingAmount == null) {
+        throw new Error("Call PATCH before POST");
+      }
+      counter += pendingAmount;
+      return res(ctx.json(null));
     }
-    if (pendingAmount == null) {
-      throw new Error("Call PATCH before POST");
-    }
-    counter += pendingAmount;
-    return res(ctx.json(null));
-  }),
-  rest.get(WORKER_URL + "/bonuses", (_req, res, ctx) => {
+  ),
+  rest.get(WORKER_URL + "/projects/test/bonuses", (_req, res, ctx) => {
     return res(ctx.json({ bonuses: bonuses }));
   }),
-  rest.delete(WORKER_URL + "/bonuses/:orderId", (req, res, ctx) => {
-    const orderId = req.params["orderId"] as string;
-    delete bonuses[orderId];
-    return res(ctx.json(null));
-  })
+  rest.delete(
+    WORKER_URL + "/projects/test/bonuses/:orderId",
+    (req, res, ctx) => {
+      const orderId = req.params["orderId"] as string;
+      delete bonuses[orderId];
+      return res(ctx.json(null));
+    }
+  )
 );
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -133,8 +140,41 @@ function MockPaypalButtons(props: PayPalButtonsComponentProps) {
   );
 }
 
+type MockAppProps = {
+  headerParenthesis?: string;
+};
+
+function MockApp({ headerParenthesis }: MockAppProps) {
+  return (
+    <ReactRouterDom.MemoryRouter initialEntries={["/projects/test"]}>
+      <ReactRouterDom.Routes>
+        <ReactRouterDom.Route
+          path="/projects/:project"
+          element=<App
+            PaypalButtons={MockPaypalButtons}
+            headerParenthesis={headerParenthesis}
+          />
+        />
+      </ReactRouterDom.Routes>
+    </ReactRouterDom.MemoryRouter>
+  );
+}
+
+function MockAdminApp() {
+  return (
+    <ReactRouterDom.MemoryRouter initialEntries={["/projects/test/admin"]}>
+      <ReactRouterDom.Routes>
+        <ReactRouterDom.Route
+          path="/projects/:project/admin"
+          element=<AdminApp />
+        />
+      </ReactRouterDom.Routes>
+    </ReactRouterDom.MemoryRouter>
+  );
+}
+
 test("App in-progress", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const progressbar = await screen.findByRole("progressbar");
   const paypalButton = await screen.findByText("PayPal");
 
@@ -147,28 +187,26 @@ test("App in-progress", async () => {
 });
 
 test("headerParenthesis", async () => {
-  render(
-    <App PaypalButtons={MockPaypalButtons} headerParenthesis="header paren" />
-  );
+  render(<MockApp headerParenthesis="header paren" />);
   expect(
     await screen.findByText("Refund Bonus (header paren)")
   ).toBeInTheDocument();
 });
 
 test("headerParenthesis empty", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   expect(await screen.findByText("Refund Bonus")).toBeInTheDocument();
   expect(screen.queryByText("Refund Bonus ()")).not.toBeInTheDocument();
 });
 
 test("Payment defaults to $89", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
   expect(amountInput).toHaveValue(89);
 });
 
 test("Less $5 dollar not accepted", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: 4 } });
   expect(await screen.findByText(/at least \$5/i)).toBeInTheDocument();
@@ -179,7 +217,7 @@ test("Less $5 dollar not accepted", async () => {
 });
 
 test("More than $500 dollar not accepted (too high chance of mistake/fraudelent refund)", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: 501 } });
   expect(await screen.findByText(/at most \$500/i)).toBeInTheDocument();
@@ -190,7 +228,7 @@ test("More than $500 dollar not accepted (too high chance of mistake/fraudelent 
 });
 
 test("Non-numeric amount not accepted", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: "not a number" } });
   const paypalButton = await screen.findByText("PayPal");
@@ -200,7 +238,7 @@ test("Non-numeric amount not accepted", async () => {
 });
 
 test("Custom amount of $32 dollars accepted", async () => {
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   const progressbar = await screen.findByRole("progressbar");
   const amountInput = await screen.findByLabelText("Amount ($)");
 
@@ -216,7 +254,7 @@ test("Custom amount of $32 dollars accepted", async () => {
 
 test("Funding deadline passed", async () => {
   fundingDeadline = "2023-01-01T01:03:00Z";
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   expect(await screen.findByText(/Funding closed/i)).toBeInTheDocument();
   expect(screen.queryByText("PayPal")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Amount ($)")).not.toBeInTheDocument();
@@ -224,7 +262,7 @@ test("Funding deadline passed", async () => {
 
 test("Funding deadline shown", async () => {
   fundingDeadline = new Date(2023, 0, 1, 18, 1, 0).toISOString();
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   expect(await screen.findByText(/2023-01-01 18:01/i)).toBeInTheDocument();
 });
 
@@ -236,7 +274,7 @@ test("Funding count-down shown", async () => {
   future.setSeconds(future.getSeconds() + 4);
   fundingDeadline = future.toISOString();
 
-  render(<App PaypalButtons={MockPaypalButtons} />);
+  render(<MockApp />);
   expect(await screen.findByText("01:02:03:04")).toBeInTheDocument();
 });
 
@@ -294,7 +332,7 @@ test("formatTime", () => {
 });
 
 test("AdminApp shows bonuses", async () => {
-  render(<AdminApp />);
+  render(<MockAdminApp />);
   expect(await screen.findByText("bob@example.com")).toBeInTheDocument();
   expect(await screen.findByText("3")).toBeInTheDocument();
   expect(await screen.findByText("sally@place.com")).toBeInTheDocument();
@@ -302,7 +340,7 @@ test("AdminApp shows bonuses", async () => {
 });
 
 test("AdminApp delete works", async () => {
-  render(<AdminApp />);
+  render(<MockAdminApp />);
   expect(await screen.findByText("bob@example.com")).toBeInTheDocument();
   expect(await screen.findByText("3")).toBeInTheDocument();
   const deletes = await screen.findAllByText("Delete");

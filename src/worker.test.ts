@@ -524,7 +524,7 @@ describe("Paypal Authenticated API", () => {
     describe("POST /contract", () => {
       it("fails with incorrect body", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ notAmount: 1123.0 }),
           }),
@@ -535,7 +535,7 @@ describe("Paypal Authenticated API", () => {
       });
       it("fails with amount greater than 500", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 501 }),
           }),
@@ -546,7 +546,7 @@ describe("Paypal Authenticated API", () => {
       });
       it("fails with amount less than 5", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 4 }),
           }),
@@ -558,7 +558,7 @@ describe("Paypal Authenticated API", () => {
       it("fails when deadline has passed", async () => {
         env.FUNDING_DEADLINE = "2023-01-01T00:00:00Z";
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 10 }),
           }),
@@ -569,7 +569,7 @@ describe("Paypal Authenticated API", () => {
       });
       it("works with correct body", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 17.0 }),
           }),
@@ -584,7 +584,7 @@ describe("Paypal Authenticated API", () => {
     describe("PATCH /contract/:contract_id", () => {
       it("works", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 17.0 }),
           }),
@@ -595,7 +595,7 @@ describe("Paypal Authenticated API", () => {
         const orderId = responseBody.id;
 
         const response2 = await worker.fetch(
-          new Request(`http://localhost/contract/${orderId}`, {
+          new Request(`http://localhost/projects/test/contract/${orderId}`, {
             method: "PATCH",
           }),
           env,
@@ -607,7 +607,9 @@ describe("Paypal Authenticated API", () => {
     describe("GET /counter", () => {
       it("starts at zero", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/counter", { method: "GET" }),
+          new Request("http://localhost/projects/test/counter", {
+            method: "GET",
+          }),
           env,
           ctx
         );
@@ -617,7 +619,7 @@ describe("Paypal Authenticated API", () => {
       });
       it("increases by 13 after you create a contract worth 13", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/contract", {
+          new Request("http://localhost/projects/test/contract", {
             method: "POST",
             body: JSON.stringify({ amount: 15 }),
           }),
@@ -640,14 +642,16 @@ describe("Paypal Authenticated API", () => {
         });
 
         await worker.fetch(
-          new Request(`http://localhost/contract/${orderId}`, {
+          new Request(`http://localhost/projects/test/contract/${orderId}`, {
             method: "PATCH",
           }),
           env,
           ctx
         );
         const response3 = await worker.fetch(
-          new Request("http://localhost/counter", { method: "GET" }),
+          new Request("http://localhost/projects/test/counter", {
+            method: "GET",
+          }),
           env,
           ctx
         );
@@ -662,7 +666,9 @@ describe("Paypal Authenticated API", () => {
       describe("Failing when unauthenticated", () => {
         it("POST /refund", async () => {
           const response = await worker.fetch(
-            new Request("http://localhost/refund", { method: "POST" }),
+            new Request("http://localhost/projects/test/refund", {
+              method: "POST",
+            }),
             env,
             ctx
           );
@@ -671,7 +677,9 @@ describe("Paypal Authenticated API", () => {
         });
         it("GET /bonuses", async () => {
           const response = await worker.fetch(
-            new Request("http://localhost/bonuses", { method: "GET" }),
+            new Request("http://localhost/projects/test/bonuses", {
+              method: "GET",
+            }),
             env,
             ctx
           );
@@ -680,7 +688,7 @@ describe("Paypal Authenticated API", () => {
         });
         it("DELETE /bonuses/whatever", async () => {
           const response = await worker.fetch(
-            new Request("http://localhost/bonuses/whatever", {
+            new Request("http://localhost/projects/test/bonuses/whatever", {
               method: "DELETE",
             }),
             env,
@@ -702,7 +710,7 @@ describe("Paypal Authenticated API", () => {
         describe("/refund", () => {
           it("POST is initially 404", async () => {
             const response = await worker.fetch(
-              new Request("http://localhost/refund", {
+              new Request("http://localhost/projects/test/refund", {
                 method: "POST",
                 headers,
               }),
@@ -713,7 +721,7 @@ describe("Paypal Authenticated API", () => {
           });
           it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
             const response = await worker.fetch(
-              new Request("http://localhost/contract", {
+              new Request("http://localhost/projects/test/contract", {
                 method: "POST",
                 body: JSON.stringify({ amount: 15 }),
               }),
@@ -737,14 +745,17 @@ describe("Paypal Authenticated API", () => {
             });
 
             await worker.fetch(
-              new Request(`http://localhost/contract/${orderId}`, {
-                method: "PATCH",
-              }),
+              new Request(
+                `http://localhost/projects/test/contract/${orderId}`,
+                {
+                  method: "PATCH",
+                }
+              ),
               env,
               ctx
             );
             const response3 = await worker.fetch(
-              new Request("http://localhost/refund", {
+              new Request("http://localhost/projects/test/refund", {
                 method: "POST",
                 headers,
               }),
@@ -754,7 +765,7 @@ describe("Paypal Authenticated API", () => {
             expect(response3.status).toBe(404);
             env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
             const response4 = await worker.fetch(
-              new Request("http://localhost/refund", {
+              new Request("http://localhost/projects/test/refund", {
                 method: "POST",
                 headers,
               }),
@@ -765,7 +776,7 @@ describe("Paypal Authenticated API", () => {
             const response4Json = await response4.json<{ refundId: string }>();
             expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
             const response5 = await worker.fetch(
-              new Request("http://localhost/refund", {
+              new Request("http://localhost/projects/test/refund", {
                 method: "POST",
                 headers,
               }),
@@ -777,7 +788,7 @@ describe("Paypal Authenticated API", () => {
         });
         it("GET /bonuses", async () => {
           const response = await worker.fetch(
-            new Request("http://localhost/contract", {
+            new Request("http://localhost/projects/test/contract", {
               method: "POST",
               body: JSON.stringify({ amount: 15 }),
             }),
@@ -801,21 +812,27 @@ describe("Paypal Authenticated API", () => {
           });
 
           await worker.fetch(
-            new Request(`http://localhost/contract/${orderId}`, {
+            new Request(`http://localhost/projects/test/contract/${orderId}`, {
               method: "PATCH",
             }),
             env,
             ctx
           );
           const response3 = await worker.fetch(
-            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            new Request("http://localhost/projects/test/bonuses", {
+              method: "GET",
+              headers,
+            }),
             env,
             ctx
           );
           expect(response3.status).toBe(404);
           env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
           const response4 = await worker.fetch(
-            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            new Request("http://localhost/projects/test/bonuses", {
+              method: "GET",
+              headers,
+            }),
             env,
             ctx
           );
@@ -830,7 +847,7 @@ describe("Paypal Authenticated API", () => {
           );
 
           const response5 = await worker.fetch(
-            new Request(`http://localhost/bonuses/${orderId}`, {
+            new Request(`http://localhost/projects/test/bonuses/${orderId}`, {
               method: "DELETE",
               headers,
             }),
@@ -839,7 +856,10 @@ describe("Paypal Authenticated API", () => {
           );
           expect(response5.status).toBe(200);
           const response6 = await worker.fetch(
-            new Request("http://localhost/bonuses", { method: "GET", headers }),
+            new Request("http://localhost/projects/test/bonuses", {
+              method: "GET",
+              headers,
+            }),
             env,
             ctx
           );

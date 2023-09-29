@@ -9,7 +9,5 @@ FRONTEND_URL=http://localhost:3000
 FUNDING_DEADLINE=2030-06-18T17:00:00Z
 # The amount of USD needed to reach the goal
 FUNDING_GOAL=850
-# Unique ID for the current project
-PROJECT_ID=demo-project
 # Password for using the admin console
 ADMIN_PASSWORD=

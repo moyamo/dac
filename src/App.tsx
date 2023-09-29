@@ -7,6 +7,7 @@ import type {
   OnClickActions,
 } from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
+import * as ReactRouterDom from "react-router-dom";
 import Countdown from "react-countdown";
 import "./App.css";
 import type {
@@ -42,6 +43,8 @@ export type AppProps = {
 
 function App(props: AppProps) {
   const { PaypalButtons, headerParenthesis } = props;
+  const { project } = ReactRouterDom.useParams();
+  if (typeof project === "undefined") throw Error("Project undefined");
   const [funded, setFunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(89);
   const [progress, setProgress] = React.useState(-1);
@@ -52,7 +55,7 @@ function App(props: AppProps) {
 
   React.useEffect(() => {
     void (async () => {
-      const count = await fetch(WORKER_URL + "/counter");
+      const count = await fetch(`${WORKER_URL}/projects/${project}/counter`);
       const response = await count.json<CounterResponse>();
       setProgress(response.amount);
       setOrders(response.orders);
@@ -115,10 +118,13 @@ function App(props: AppProps) {
                     _data: CreateOrderData,
                     _actions: CreateOrderActions
                   ) => {
-                    const response = await fetch(WORKER_URL + "/contract", {
-                      method: "POST",
-                      body: JSON.stringify({ amount: amountRef.current }),
-                    });
+                    const response = await fetch(
+                      `${WORKER_URL}/projects/${project}/contract`,
+                      {
+                        method: "POST",
+                        body: JSON.stringify({ amount: amountRef.current }),
+                      }
+                    );
                     const responseJson: CreateOrderResponse =
                       await response.json();
                     return responseJson.id;
@@ -128,7 +134,7 @@ function App(props: AppProps) {
                     _actions: OnApproveActions
                   ) => {
                     const response = await fetch(
-                      WORKER_URL + "/contract/" + data.orderID,
+                      `${WORKER_URL}/projects/${project}/contract/${data.orderID}`,
                       {
                         method: "PATCH",
                       }
@@ -415,23 +421,33 @@ export function formatTime(isoTimeString: string): string {
 }
 
 export function AdminApp() {
+  const { project } = ReactRouterDom.useParams();
+  if (typeof project === "undefined") throw Error("Project undefined");
   return (
     <>
       <h1>Admin App</h1>
       <h2>Pending Payouts</h2>
-      <PendingPayoutsTable />
+      <PendingPayoutsTable project={project} />
     </>
   );
 }
 
-function PendingPayoutsTable() {
+type PendingPayoutsTableProps = {
+  project: string;
+};
+
+function PendingPayoutsTable(props: PendingPayoutsTableProps) {
+  const { project } = props;
   const [bonuses, setBonuses] = React.useState<Record<string, Bonus>>({});
   const [updates, setUpdates] = React.useState(0);
   React.useEffect(() => {
     void (async () => {
-      const response = await fetch(WORKER_URL + "/bonuses", {
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${WORKER_URL}/projects/${project}/bonuses`,
+        {
+          credentials: "include",
+        }
+      );
       const bonuses = await response.json<BonusesResponse>();
       setBonuses(bonuses.bonuses || {});
     })();
@@ -455,10 +471,13 @@ function PendingPayoutsTable() {
               <button
                 onClick={() =>
                   void (async () => {
-                    const r = await fetch(`${WORKER_URL}/bonuses/${orderId}`, {
-                      method: "DELETE",
-                      credentials: "include",
-                    });
+                    const r = await fetch(
+                      `${WORKER_URL}/projects/${project}/bonuses/${orderId}`,
+                      {
+                        method: "DELETE",
+                        credentials: "include",
+                      }
+                    );
                     if (!r.ok) {
                       alert(`${r.status} ${r.statusText}`);
                     }
