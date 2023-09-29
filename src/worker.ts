@@ -157,6 +157,8 @@ export default {
       })
     );
 
+    router.get("/projectId", () => ({ projectId: projectId }));
+
     router.all("*", () => Itty.error(404));
 
     let response = router
