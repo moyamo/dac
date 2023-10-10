@@ -3,6 +3,10 @@ main = "src/worker.ts"
 compatibility_date = "2023-04-26"
 compatibility_flags = [ "nodejs_compat" ]
 
+kv_namespaces = [
+  { binding = "PROJECTS", id = "aefc757a99c94067a4a0f2eada05aac0", preview_id = "1e6f338da1024fe289b395f0c70c3a65" }
+]
+
 [durable_objects]
 bindings = [
   { name = "COUNTER", class_name = "Counter" } # Binding to our DurableObjectExample class

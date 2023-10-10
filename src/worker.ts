@@ -26,7 +26,18 @@ export interface Env {
   FUNDING_DEADLINE?: string;
   FUNDING_GOAL?: string;
   ADMIN_PASSWORD?: string;
+  PROJECTS?: KVNamespace;
 }
+
+export type Project = {
+  fundingDeadline: string;
+  fundingGoal: string;
+  formHeading: string;
+  description: string;
+  authorName: string;
+  authorImageUrl: string;
+  authorDescription: string;
+};
 
 export function withAdmin<R extends Request>(req: R, env: Env) {
   const unauthorized = Itty.text("", {
@@ -46,6 +57,13 @@ export function withAdmin<R extends Request>(req: R, env: Env) {
     return unauthorized;
 }
 
+function getProjects(env: Env): KVNamespace {
+  if (typeof env.PROJECTS == "undefined") {
+    throw Error("KV PROJECTS not bound");
+  }
+  return env.PROJECTS;
+}
+
 export default {
   async fetch(
     request: Request,
@@ -59,7 +77,7 @@ export default {
     if (corsOrigin) {
       const { preflight, corsify } = Itty.createCors({
         origins: [corsOrigin],
-        methods: ["GET", "HEAD", "POST", "OPTIONS", "PATCH", "DELETE"],
+        methods: ["GET", "HEAD", "POST", "PUT", "OPTIONS", "PATCH", "DELETE"],
         maxAge: 86400,
         headers: {
           "Access-Control-Allow-Credentials": true,
@@ -121,6 +139,21 @@ export default {
       const resp = await obj.fetch(`${origin}/counter`, { method: "GET" });
       const count = await resp.json<number>();
       return count;
+    });
+
+    router.get("/projects/:projectId", async (req) => {
+      const { projectId } = req.params;
+      const projectString = await getProjects(env).get(projectId);
+      if (projectString == null) return Itty.error(404);
+      const project: Project = JSON.parse(projectString) as Project;
+      return { project: project };
+    });
+
+    router.put("/projects/:projectId", withAdmin, async (req) => {
+      const { projectId } = req.params;
+      const jsonBody = await req.json<{ project: Project }>();
+      await getProjects(env).put(projectId, JSON.stringify(jsonBody.project));
+      return {};
     });
 
     router.post("/projects/:projectId/refund", withAdmin, async (req) => {

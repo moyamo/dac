@@ -19,6 +19,7 @@ import worker, {
   refundCapture,
   withAdmin,
   Bonus,
+  Project,
 } from "./worker";
 
 let env: Env;
@@ -697,6 +698,18 @@ describe("Paypal Authenticated API", () => {
           expect(response.status).toBe(401);
           expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
         });
+        it("PUT /projects/:projectId", async () => {
+          const response = await worker.fetch(
+            new Request("http://localhost/projects/test", {
+              method: "PUT",
+              body: JSON.stringify({ project: {} }),
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(401);
+          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+        });
       });
       describe("Authenticated", () => {
         let headers = {};
@@ -864,6 +877,52 @@ describe("Paypal Authenticated API", () => {
             ctx
           );
           expect(response6.status).toBe(404);
+        });
+        describe("PUT /projects/:projectId", () => {
+          it("persists project data", async () => {
+            const response = await worker.fetch(
+              new Request("http://localhost/projects/myproject", {
+                method: "PUT",
+                headers,
+                body: JSON.stringify({
+                  project: {
+                    fundingGoal: "200",
+                    fundingDeadline: "2023-01-01T12:01:01.000Z",
+                    formHeading: "Test Form Heading",
+                    description: "<b>be bold</b>",
+                    authorName: "Test Person",
+                    authorImageUrl: "http://localhost/image.jpgl",
+                    authorDescription: "Not a <i>real</i> person.",
+                  },
+                }),
+              }),
+              env,
+              ctx
+            );
+            expect(response.status).toBe(200);
+            const response2 = await worker.fetch(
+              new Request("http://localhost/projects/myproject", {
+                method: "GET",
+              }),
+              env,
+              ctx
+            );
+            expect(response2.status).toBe(200);
+            const jsonBody = await response2.json<{ project: Project }>();
+            expect(jsonBody.project.fundingGoal).toBe("200");
+            expect(jsonBody.project.fundingDeadline).toBe(
+              "2023-01-01T12:01:01.000Z"
+            );
+            expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+            expect(jsonBody.project.description).toBe("<b>be bold</b>");
+            expect(jsonBody.project.authorName).toBe("Test Person");
+            expect(jsonBody.project.authorImageUrl).toBe(
+              "http://localhost/image.jpgl"
+            );
+            expect(jsonBody.project.authorDescription).toBe(
+              "Not a <i>real</i> person."
+            );
+          });
         });
       });
     });

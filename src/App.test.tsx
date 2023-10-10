@@ -17,12 +17,13 @@ import App, {
 import { rest } from "msw";
 import { setupServer } from "msw/node";
 import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
-import type { Bonus } from "./worker";
+import type { Bonus, Project } from "./worker";
 
 let counter = 0;
 let pendingAmount: number | null = null;
 let fundingDeadline = "2023-01-01T01:01:01Z";
 let bonuses: Record<string, Bonus> = {};
+let project: Project | null = null;
 beforeEach(() => {
   counter = 0;
   pendingAmount = null;
@@ -33,6 +34,7 @@ beforeEach(() => {
     order1: { email: "bob@example.com", amount: 3 },
     order2: { email: "sally@place.com", amount: 10 },
   };
+  project = null;
 });
 
 const server = setupServer(
@@ -74,7 +76,18 @@ const server = setupServer(
       delete bonuses[orderId];
       return res(ctx.json(null));
     }
-  )
+  ),
+  rest.get(WORKER_URL + "/projects/test", (_req, res, ctx) => {
+    if (project == null) {
+      return res(ctx.status(404));
+    } else {
+      return res(ctx.json({ project: project }));
+    }
+  }),
+  rest.put(WORKER_URL + "/projects/test", async (req, res, ctx) => {
+    project = (await req.json<{ project: Project }>()).project;
+    return res(ctx.status(200));
+  })
 );
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -348,5 +361,36 @@ test("AdminApp delete works", async () => {
   await waitFor(() => {
     expect(screen.queryByText("bob@example.com")).not.toBeInTheDocument();
     expect(screen.queryByText("3")).not.toBeInTheDocument();
+  });
+});
+
+test("AdminApp Project Config Works", async () => {
+  render(<MockAdminApp />);
+  async function changeInput(label: string, value: string) {
+    const input = await screen.findByLabelText(label);
+    fireEvent.change(input, { target: { value: value } });
+  }
+  await changeInput("Funding Goal", "100");
+  await changeInput("Funding Deadline", "2023-01-01T12:33");
+  await changeInput("Form Heading", "This is a heading");
+  await changeInput("Description", "This is a description");
+  await changeInput("Author Name", "John Doe");
+  await changeInput("Author Image Url", "/image.jpeg");
+  await changeInput("Author Description", "This is author description");
+
+  const form = await screen.findByRole("form");
+  fireEvent.submit(form);
+  await waitFor(() => {
+    if (project == null) {
+      expect(project).not.toBe(null);
+    } else {
+      expect(project.fundingGoal).toBe("100");
+      expect(project.fundingDeadline).toBe("2023-01-01T10:33:00.000Z");
+      expect(project.formHeading).toBe("This is a heading");
+      expect(project.description).toBe("This is a description");
+      expect(project.authorName).toBe("John Doe");
+      expect(project.authorImageUrl).toBe("/image.jpeg");
+      expect(project.authorDescription).toBe("This is author description");
+    }
   });
 });

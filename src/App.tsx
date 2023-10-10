@@ -16,6 +16,7 @@ import type {
   CounterResponse,
   CreateOrderResponse,
   Order,
+  Project,
 } from "./worker";
 import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
 
@@ -428,6 +429,8 @@ export function AdminApp() {
       <h1>Admin App</h1>
       <h2>Pending Payouts</h2>
       <PendingPayoutsTable project={project} />
+      <h2>Config</h2>
+      <ConfigForm project={project} />
     </>
   );
 }
@@ -492,6 +495,122 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+const ProjectStateContext = React.createContext<
+  [Partial<Project>, React.Dispatch<React.SetStateAction<Partial<Project>>>]
+>([{}, (_mP) => null]);
+
+function ProjectInput({ type, label }: { type: string; label: string }) {
+  const [project, setProject] = React.useContext(ProjectStateContext);
+  function onFirstChar(f: (s: string) => string) {
+    // Returns function which applies f to first character of the first argument
+    return (s: string) => f(s.slice(0, 1)) + s.slice(1);
+  }
+  const Name = label
+    .split(" ")
+    .map(onFirstChar((c) => c.toUpperCase()))
+    .join("");
+  const name = onFirstChar((c) => c.toLowerCase())(Name) as keyof Project;
+  const id = "ConfigForm" + Name;
+
+  function projectToInput(project: Partial<Project>): string {
+    let value = project[name] || "";
+    if (type == "datetime-local" && value != "") {
+      // See https://stackoverflow.com/questions/30166338/setting-value-of-datetime-local-from-date
+      const valueD = new Date(value);
+      valueD.setMinutes(valueD.getMinutes() - valueD.getTimezoneOffset());
+      value = valueD.toISOString().slice(0, 16);
+    }
+    return value;
+  }
+
+  function inputToProject(value: string): string {
+    if (type == "datetime-local" && value != "") {
+      value = new Date(value).toISOString();
+    }
+    return value;
+  }
+
+  const commonProps = {
+    key: id,
+    name,
+    value: projectToInput(project),
+    id,
+    onChange(e: React.ChangeEvent<HTMLInputElement & HTMLTextAreaElement>) {
+      const value = inputToProject(e.target.value);
+      return setProject((project) => {
+        if (project == null) project = {};
+        return { ...project, [name]: value };
+      });
+    },
+  };
+  return (
+    <>
+      <label htmlFor={id}> {label} </label>
+      {type == "textarea" ? (
+        <textarea {...commonProps} />
+      ) : (
+        <input type={type} {...commonProps} />
+      )}
+    </>
+  );
+}
+
+type ConfigFormProps = {
+  project: string;
+};
+
+function ConfigForm(props: ConfigFormProps) {
+  const projectId = props.project;
+  const [project, setProject] = React.useState<Partial<Project>>({});
+  const [updates, setUpdates] = React.useState(0);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    void (async () => {
+      const response = await fetch(`${WORKER_URL}/projects/${projectId}`);
+      if (response.ok) {
+        const r = await response.json<{ project: Project }>();
+        setProject(r.project);
+        setError(null);
+      } else {
+        setError(`${response.status} ${response.statusText}`);
+      }
+    })();
+  }, [updates]);
+
+  return (
+    <ProjectStateContext.Provider value={[project, setProject]}>
+      {error == null ? null : <div className="error">{error}</div>}
+      <form
+        role="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void (async () => {
+            const r = await fetch(`${WORKER_URL}/projects/${projectId}`, {
+              method: "PUT",
+              credentials: "include",
+              body: JSON.stringify({ project: project }),
+            });
+            if (!r.ok) {
+              setError(`${r.status} ${r.statusText}`);
+            }
+            setError(null);
+            setUpdates((updates) => updates + 1);
+          })();
+        }}
+      >
+        <ProjectInput type="text" label="Funding Goal" />
+        <ProjectInput type="datetime-local" label="Funding Deadline" />
+        <ProjectInput type="text" label="Form Heading" />
+        <ProjectInput type="textarea" label="Description" />
+        <ProjectInput type="text" label="Author Name" />
+        <ProjectInput type="text" label="Author Image Url" />
+        <ProjectInput type="textarea" label="Author Description" />
+        <input type="submit" value="Submit" />
+      </form>
+    </ProjectStateContext.Provider>
   );
 }
 
