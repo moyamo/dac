@@ -6,13 +6,13 @@ import type {
   OnApproveData,
   OnApproveActions,
 } from "@paypal/paypal-js/types/components/buttons";
-import App, {
+import {
   FundingProgressBar,
   WORKER_URL,
   FunderTable,
   formatTime,
   FundingTimer,
-  AdminApp,
+  routes,
 } from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
@@ -159,30 +159,30 @@ type MockAppProps = {
 
 function MockApp({ headerParenthesis }: MockAppProps) {
   return (
-    <ReactRouterDom.MemoryRouter initialEntries={["/projects/test"]}>
-      <ReactRouterDom.Routes>
-        <ReactRouterDom.Route
-          path="/projects/:project"
-          element=<App
-            PaypalButtons={MockPaypalButtons}
-            headerParenthesis={headerParenthesis}
-          />
-        />
-      </ReactRouterDom.Routes>
-    </ReactRouterDom.MemoryRouter>
+    <ReactRouterDom.RouterProvider
+      router={ReactRouterDom.createMemoryRouter(
+        routes({
+          PaypalButtons: MockPaypalButtons,
+          headerParenthesis: headerParenthesis,
+        }),
+        {
+          initialEntries: ["/projects/test"],
+        }
+      )}
+    />
   );
 }
 
 function MockAdminApp() {
   return (
-    <ReactRouterDom.MemoryRouter initialEntries={["/projects/test/admin"]}>
-      <ReactRouterDom.Routes>
-        <ReactRouterDom.Route
-          path="/projects/:project/admin"
-          element=<AdminApp />
-        />
-      </ReactRouterDom.Routes>
-    </ReactRouterDom.MemoryRouter>
+    <ReactRouterDom.RouterProvider
+      router={ReactRouterDom.createMemoryRouter(
+        routes({ PaypalButtons: MockPaypalButtons }),
+        {
+          initialEntries: ["/projects/test/admin"],
+        }
+      )}
+    />
   );
 }
 

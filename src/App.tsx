@@ -8,6 +8,7 @@ import type {
 } from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import * as ReactRouterDom from "react-router-dom";
+import type { LoaderFunctionArgs } from "react-router";
 import Countdown from "react-countdown";
 import "./App.css";
 import type {
@@ -35,6 +36,73 @@ function useStateRef<T>(
     setStateInternal(newValue);
   }
   return [stateRef, setState];
+}
+
+function RedirectToDemo() {
+  const navigate = ReactRouterDom.useNavigate();
+  const toUrl = "/projects/dac2023w35production";
+
+  React.useEffect(() => navigate(toUrl, { replace: true }));
+  return (
+    <>
+      You will be redirected shortly to{" "}
+      <ReactRouterDom.Link to={toUrl}>{toUrl}</ReactRouterDom.Link>
+    </>
+  );
+}
+
+export type RoutesArgs = {
+  PaypalButtons: React.FunctionComponent<PayPalButtonsComponentProps>;
+  headerParenthesis?: string;
+};
+
+export function routes({
+  PaypalButtons,
+  headerParenthesis,
+}: RoutesArgs): ReactRouterDom.RouteObject[] {
+  return [
+    {
+      path: "/",
+      element: <RedirectToDemo />,
+    },
+    {
+      path: "/projects/:project",
+      element: (
+        <App
+          PaypalButtons={PaypalButtons}
+          headerParenthesis={headerParenthesis}
+        />
+      ),
+    },
+    {
+      path: "/projects/:project/admin",
+      loader: projectLoader,
+      element: <AdminApp />,
+    },
+  ];
+}
+
+type ProjectLoader = { project?: Project; error?: string };
+
+async function projectLoader({
+  request: _reqeust,
+  params,
+}: LoaderFunctionArgs): Promise<ProjectLoader> {
+  const { project: projectId } = params;
+  if (typeof projectId == "undefined") {
+    return { error: "project undefined" };
+  }
+  const response = await fetch(`${WORKER_URL}/projects/${projectId}`);
+  if (response.ok) {
+    const r = await response.json<{ project: Project }>();
+    return {
+      project: r.project,
+    };
+  } else {
+    return {
+      error: `${response.status} ${response.statusText}`,
+    };
+  }
 }
 
 export type AppProps = {
@@ -564,21 +632,13 @@ type ConfigFormProps = {
 
 function ConfigForm(props: ConfigFormProps) {
   const projectId = props.project;
-  const [project, setProject] = React.useState<Partial<Project>>({});
-  const [updates, setUpdates] = React.useState(0);
-  const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    void (async () => {
-      const response = await fetch(`${WORKER_URL}/projects/${projectId}`);
-      if (response.ok) {
-        const r = await response.json<{ project: Project }>();
-        setProject(r.project);
-        setError(null);
-      } else {
-        setError(`${response.status} ${response.statusText}`);
-      }
-    })();
-  }, [updates]);
+  const { project: initialProject, error: initialError } =
+    ReactRouterDom.useLoaderData() as ProjectLoader;
+  const [project, setProject] = React.useState<Partial<Project>>(
+    initialProject || {}
+  );
+  const [error, setError] = React.useState<string | null>(initialError || null);
+  const navigate = ReactRouterDom.useNavigate();
 
   return (
     <ProjectStateContext.Provider value={[project, setProject]}>
@@ -595,9 +655,10 @@ function ConfigForm(props: ConfigFormProps) {
             });
             if (!r.ok) {
               setError(`${r.status} ${r.statusText}`);
+            } else {
+              setError(null);
+              navigate(0); // reload
             }
-            setError(null);
-            setUpdates((updates) => updates + 1);
           })();
         }}
       >
