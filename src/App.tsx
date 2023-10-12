@@ -66,7 +66,7 @@ export function routes({
       element: <RedirectToDemo />,
     },
     {
-      path: "/projects/:project",
+      path: "/projects/:projectId",
       element: (
         <App
           PaypalButtons={PaypalButtons}
@@ -75,7 +75,7 @@ export function routes({
       ),
     },
     {
-      path: "/projects/:project/admin",
+      path: "/projects/:projectId/admin",
       loader: projectLoader,
       element: <AdminApp />,
     },
@@ -88,7 +88,7 @@ async function projectLoader({
   request: _reqeust,
   params,
 }: LoaderFunctionArgs): Promise<ProjectLoader> {
-  const { project: projectId } = params;
+  const { projectId } = params;
   if (typeof projectId == "undefined") {
     return { error: "project undefined" };
   }
@@ -112,8 +112,8 @@ export type AppProps = {
 
 function App(props: AppProps) {
   const { PaypalButtons, headerParenthesis } = props;
-  const { project } = ReactRouterDom.useParams();
-  if (typeof project === "undefined") throw Error("Project undefined");
+  const { projectId } = ReactRouterDom.useParams();
+  if (typeof projectId === "undefined") throw Error("projectId undefined");
   const [funded, setFunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(89);
   const [progress, setProgress] = React.useState(-1);
@@ -124,7 +124,7 @@ function App(props: AppProps) {
 
   React.useEffect(() => {
     void (async () => {
-      const count = await fetch(`${WORKER_URL}/projects/${project}/counter`);
+      const count = await fetch(`${WORKER_URL}/projects/${projectId}/counter`);
       const response = await count.json<CounterResponse>();
       setProgress(response.amount);
       setOrders(response.orders);
@@ -188,7 +188,7 @@ function App(props: AppProps) {
                     _actions: CreateOrderActions
                   ) => {
                     const response = await fetch(
-                      `${WORKER_URL}/projects/${project}/contract`,
+                      `${WORKER_URL}/projects/${projectId}/contract`,
                       {
                         method: "POST",
                         body: JSON.stringify({ amount: amountRef.current }),
@@ -203,7 +203,7 @@ function App(props: AppProps) {
                     _actions: OnApproveActions
                   ) => {
                     const response = await fetch(
-                      `${WORKER_URL}/projects/${project}/contract/${data.orderID}`,
+                      `${WORKER_URL}/projects/${projectId}/contract/${data.orderID}`,
                       {
                         method: "PATCH",
                       }
@@ -490,31 +490,31 @@ export function formatTime(isoTimeString: string): string {
 }
 
 export function AdminApp() {
-  const { project } = ReactRouterDom.useParams();
-  if (typeof project === "undefined") throw Error("Project undefined");
+  const { projectId } = ReactRouterDom.useParams();
+  if (typeof projectId === "undefined") throw Error("Project undefined");
   return (
     <>
       <h1>Admin App</h1>
       <h2>Pending Payouts</h2>
-      <PendingPayoutsTable project={project} />
+      <PendingPayoutsTable projectId={projectId} />
       <h2>Config</h2>
-      <ConfigForm project={project} />
+      <ConfigForm projectId={projectId} />
     </>
   );
 }
 
 type PendingPayoutsTableProps = {
-  project: string;
+  projectId: string;
 };
 
 function PendingPayoutsTable(props: PendingPayoutsTableProps) {
-  const { project } = props;
+  const { projectId } = props;
   const [bonuses, setBonuses] = React.useState<Record<string, Bonus>>({});
   const [updates, setUpdates] = React.useState(0);
   React.useEffect(() => {
     void (async () => {
       const response = await fetch(
-        `${WORKER_URL}/projects/${project}/bonuses`,
+        `${WORKER_URL}/projects/${projectId}/bonuses`,
         {
           credentials: "include",
         }
@@ -543,7 +543,7 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
                 onClick={() =>
                   void (async () => {
                     const r = await fetch(
-                      `${WORKER_URL}/projects/${project}/bonuses/${orderId}`,
+                      `${WORKER_URL}/projects/${projectId}/bonuses/${orderId}`,
                       {
                         method: "DELETE",
                         credentials: "include",
@@ -627,11 +627,11 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
 }
 
 type ConfigFormProps = {
-  project: string;
+  projectId: string;
 };
 
 function ConfigForm(props: ConfigFormProps) {
-  const projectId = props.project;
+  const { projectId } = props;
   const { project: initialProject, error: initialError } =
     ReactRouterDom.useLoaderData() as ProjectLoader;
   const [project, setProject] = React.useState<Partial<Project>>(
