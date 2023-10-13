@@ -21,20 +21,26 @@ import type { Bonus, Project } from "./worker";
 
 let counter = 0;
 let pendingAmount: number | null = null;
-let fundingDeadline = "2023-01-01T01:01:01Z";
 let bonuses: Record<string, Bonus> = {};
-let project: Project | null = null;
+let project: Project;
 beforeEach(() => {
   counter = 0;
   pendingAmount = null;
   const future = new Date();
   future.setHours(future.getHours() + 24);
-  fundingDeadline = future.toISOString();
   bonuses = {
     order1: { email: "bob@example.com", amount: 3 },
     order2: { email: "sally@place.com", amount: 10 },
   };
-  project = null;
+  project = {
+    fundingGoal: "200",
+    fundingDeadline: future.toISOString(),
+    formHeading: "Test Form Heading",
+    description: "<b>be bold</b>",
+    authorName: "Test Person",
+    authorImageUrl: "http://localhost/image.jpg",
+    authorDescription: "Not a <i>real</i> person.",
+  };
 });
 
 const server = setupServer(
@@ -43,8 +49,6 @@ const server = setupServer(
       ctx.json({
         amount: counter,
         orders: [],
-        fundingGoal: 507,
-        fundingDeadline: fundingDeadline,
       })
     );
   }),
@@ -84,6 +88,20 @@ const server = setupServer(
       return res(ctx.json({ project: project }));
     }
   }),
+  rest.get(WORKER_URL + "/projects/dac2023w35production", (_req, res, ctx) => {
+    return res(ctx.status(404));
+  }),
+  rest.get(
+    WORKER_URL + "/projects/dac2023w35production/counter",
+    (_req, res, ctx) => {
+      return res(
+        ctx.json({
+          amount: 0,
+          orders: [],
+        })
+      );
+    }
+  ),
   rest.put(WORKER_URL + "/projects/test", async (req, res, ctx) => {
     project = (await req.json<{ project: Project }>()).project;
     return res(ctx.status(200));
@@ -186,6 +204,19 @@ function MockAdminApp() {
   );
 }
 
+test("RedirectToDemo", async () => {
+  const router = ReactRouterDom.createMemoryRouter(
+    routes({ PaypalButtons: MockPaypalButtons }),
+    { initialEntries: ["/"] }
+  );
+  render(<ReactRouterDom.RouterProvider router={router} />);
+  await waitFor(() => {
+    expect(router.state.location.pathname).toBe(
+      "/projects/dac2023w35production"
+    );
+  });
+});
+
 test("App in-progress", async () => {
   render(<MockApp />);
   const progressbar = await screen.findByRole("progressbar");
@@ -266,7 +297,7 @@ test("Custom amount of $32 dollars accepted", async () => {
 });
 
 test("Funding deadline passed", async () => {
-  fundingDeadline = "2023-01-01T01:03:00Z";
+  project.fundingDeadline = "2023-01-01T01:03:00Z";
   render(<MockApp />);
   expect(await screen.findByText(/Funding closed/i)).toBeInTheDocument();
   expect(screen.queryByText("PayPal")).not.toBeInTheDocument();
@@ -274,7 +305,7 @@ test("Funding deadline passed", async () => {
 });
 
 test("Funding deadline shown", async () => {
-  fundingDeadline = new Date(2023, 0, 1, 18, 1, 0).toISOString();
+  project.fundingDeadline = new Date(2023, 0, 1, 18, 1, 0).toISOString();
   render(<MockApp />);
   expect(await screen.findByText(/2023-01-01 18:01/i)).toBeInTheDocument();
 });
@@ -285,7 +316,7 @@ test("Funding count-down shown", async () => {
   future.setHours(future.getHours() + 2);
   future.setMinutes(future.getMinutes() + 3);
   future.setSeconds(future.getSeconds() + 4);
-  fundingDeadline = future.toISOString();
+  project.fundingDeadline = future.toISOString();
 
   render(<MockApp />);
   expect(await screen.findByText("01:02:03:04")).toBeInTheDocument();

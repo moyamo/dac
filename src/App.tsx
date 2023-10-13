@@ -10,6 +10,8 @@ import React from "react";
 import * as ReactRouterDom from "react-router-dom";
 import type { LoaderFunctionArgs } from "react-router";
 import Countdown from "react-countdown";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 import "./App.css";
 import type {
   Bonus,
@@ -38,11 +40,30 @@ function useStateRef<T>(
   return [stateRef, setState];
 }
 
+type MarkdownProps = { markdown: string };
+
+function Markdown({ markdown }: MarkdownProps) {
+  return (
+    <div
+      dangerouslySetInnerHTML={{
+        __html: DOMPurify.sanitize(marked.parse(markdown)),
+      }}
+    ></div>
+  );
+}
+
 function RedirectToDemo() {
   const navigate = ReactRouterDom.useNavigate();
   const toUrl = "/projects/dac2023w35production";
+  // prevent infinite loop
+  const [triedToNavigate, setTriedToNavigate] = React.useState(false);
 
-  React.useEffect(() => navigate(toUrl, { replace: true }));
+  React.useEffect(() => {
+    if (!triedToNavigate) {
+      navigate(toUrl, { replace: true });
+      setTriedToNavigate(true);
+    }
+  }, [triedToNavigate]);
   return (
     <>
       You will be redirected shortly to{" "}
@@ -67,6 +88,7 @@ export function routes({
     },
     {
       path: "/projects/:projectId",
+      loader: projectLoader,
       element: (
         <App
           PaypalButtons={PaypalButtons}
@@ -113,12 +135,12 @@ export type AppProps = {
 function App(props: AppProps) {
   const { PaypalButtons, headerParenthesis } = props;
   const { projectId } = ReactRouterDom.useParams();
+  const { project, error: loaderError } =
+    ReactRouterDom.useLoaderData() as ProjectLoader;
   if (typeof projectId === "undefined") throw Error("projectId undefined");
   const [funded, setFunded] = React.useState(false);
   const [amountRef, setAmount] = useStateRef(89);
   const [progress, setProgress] = React.useState(-1);
-  const [fundingGoal, setFundingGoal] = React.useState(-1);
-  const [fundingDeadline, setFundingDeadline] = React.useState("");
 
   const [orders, setOrders] = React.useState<Order[]>([]);
 
@@ -128,8 +150,6 @@ function App(props: AppProps) {
       const response = await count.json<CounterResponse>();
       setProgress(response.amount);
       setOrders(response.orders);
-      setFundingGoal(response.fundingGoal);
-      setFundingDeadline(response.fundingDeadline);
     })();
   }, [funded]);
 
@@ -141,19 +161,18 @@ function App(props: AppProps) {
         }`}</h1>
       </header>
 
-      {
+      {typeof project == "undefined" ? (
+        <div className="error"> {loaderError} </div>
+      ) : (
         <>
           <form>
-            <h2>
-              Yaseen is creating a platform for raising money for giving away
-              products for free
-            </h2>
+            <h2>{project.formHeading}</h2>
             <FundingProgressBar
               funded={funded}
               progress={progress}
-              goal={fundingGoal}
+              goal={Number(project.fundingGoal)}
             />
-            {hasFundingDeadlinePassed(fundingDeadline) ? null : (
+            {hasFundingDeadlinePassed(project.fundingDeadline) ? null : (
               <>
                 <label htmlFor="amount">Amount ($)</label>
                 <input
@@ -228,152 +247,26 @@ function App(props: AppProps) {
                 </p>
               </>
             )}
-            <FundingTimer deadline={fundingDeadline} />
+            <FundingTimer deadline={project.fundingDeadline} />
           </form>
-          <h2>How to give things away for free and get paid doing it </h2>
-          <p>
-            <i>
-              Imagine a world with no ads or paywalls. A world where
-              Game-of-Thrones-quality shows are freely available on YouTube. A
-              world where open-source software gets the same level of funding as
-              proprietary software. A world where people can freely reuse ideas
-              and music without paying royalties. Is this a fantasy world? No,
-              this is the world where people use this platform.
-            </i>
-          </p>
-          <p>Here is how this works. You give me money.</p>
-          <ul>
-            <li>
-              {" "}
-              If I do not reach the target by the deadline. I will refund
-              everyone. I will also{" "}
-              <em>give a refund bonus of 20% your pledge</em> as a thank you for
-              supporting this project{" "}
-            </li>
-            <li>
-              If I do reach that target by the deadline. I keep all the money
-              and use it to develop a platform that allows you to raise money in
-              the same way (crowdfunding with a refund bonus) to fund your art
-              projects, software projects, etc. &mdash; anything you are willing
-              to give a way for free.
-            </li>
-          </ul>
-          <b>It&apos;s a win-win situation. Why haven&apos;t you pledged?</b>
-          <h3>Details</h3>
-          <p>
-            You&apos;re collectively paying for 1 month of my time to make this
-            idea a reality. I&apos;ll likely ask for additional funding in the
-            future to implement more features after the first month, and for
-            specific expenses as they come up.
-          </p>
-          <p>
-            The plan is to create a website where public-good producers can
-            create a page that
-          </p>
-          <ul>
-            <li>will have a description of the project,</li>
-            <li>
-              will have a progress bar showing how much and who have pledged,
-              and
-            </li>
-            <li>will handle payments with PayPal.</li>
-            <li>
-              If the project doesn&apos;t reach its funding goal, then the
-              customers will be automatically refunded (with a refund bonus). If
-              the project does reach its goal, then the public-good producer
-              will receive the funding in their PayPal account.
-            </li>
-            <li>
-              The public-good producer will put up the refund bonus as
-              collateral using PayPal.
-            </li>
-          </ul>
-          <p>
-            The website is essentially already done. (You are looking at the
-            prototype now!). It just needs to be fleshed out to allow other
-            public-good producers to upload their projects. Really, what I
-            actually want to do is find people who want to create public goods
-            and get feedback from them (if that&apos;s you please{" "}
-            <a href="#contact"> join our discord or contact me</a>). I may try
-            some additional cool things, such as
-          </p>
-          <ul>
-            <li>using prediction markets to price projects, or</li>
-            <li>
-              bringing in investors/advertisers who will put up the collateral
-              on behalf of the producers and who will take a cut if the project
-              succeeds.
-            </li>
-          </ul>
-          <h3>
-            &ldquo;I don&apos;t believe you. How will giving you money make
-            Game-of-Thrones quality shows on freely available on YouTube?&rdquo;
-          </h3>
-          <p>
-            If you have an idea for a great show, instead of pitching it to
-            holywood executives, you could pitch it to the public and have them
-            crowdfund it. Then after you produce it, you give it away for free.{" "}
-          </p>
-          <h3>
-            &ldquo;I have questions,&rdquo; or &ldquo;I don&apos;t trust
-            you.&rdquo;
-          </h3>
-          <p>
-            You can check out my social media below. The list of funders and the
-            time they funded is also listed below so can check that I&apos;m not
-            cheating.
-          </p>
+          <Markdown markdown={project.description} />
           <div id="contact">
-            <h2> Yaseen Mowzer </h2>
+            <h2> {project.authorName} </h2>
             <img
               id="portrait"
-              src="/yaseen-portrait.jpg"
+              src={project.authorImageUrl}
               width="128"
               height="128"
             ></img>
             <div id="contact-content">
-              <p>
-                Yaseen is a Software Developer with over 3 years of industry
-                experience. You can{" "}
-              </p>
-              <ul>
-                <li>
-                  follow me for updates{" "}
-                  <a href="https://twitter.com/Moyamodehacker">
-                    @moyamodehacker
-                  </a>
-                </li>
-                <li>
-                  join us on the{" "}
-                  <a href="https://discord.gg/KGeCTx33g">
-                    Refund Bonus Discord
-                  </a>
-                </li>
-                <li>
-                  email me at{" "}
-                  <a href="mailto:yaseen@mowzer.co.za">yaseen@mowzer.co.za</a>
-                </li>
-
-                <li>
-                  verify that I&apos;m a real person on{" "}
-                  <a href="https://www.linkedin.com/in/yaseen-mowzer-389938165/">
-                    Linked in
-                  </a>
-                </li>
-                <li>
-                  fork this website on{" "}
-                  <a href="https://github.com/moyamo/dac">
-                    github.com/moyamo/dac
-                  </a>
-                </li>
-              </ul>
+              <Markdown markdown={project.authorDescription} />
             </div>
           </div>
           <hr />
           <h2>Funders</h2>
           <FunderTable orders={orders} />
         </>
-      }
+      )}
     </>
   );
 }

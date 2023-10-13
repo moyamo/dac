@@ -194,13 +194,29 @@ describe("withAdmin", () => {
 });
 
 describe("Paypal Authenticated API", () => {
-  beforeEach(() => {
+  async function setProject(project: Project) {
+    if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
+    return await env.PROJECTS.put("test", JSON.stringify(project));
+  }
+
+  const future = new Date();
+  future.setHours(future.getHours() + 24);
+  const futureFundingDeadline = future.toISOString();
+  const defaultProject = {
+    fundingGoal: "200",
+    fundingDeadline: futureFundingDeadline,
+    formHeading: "Test Form Heading",
+    description: "<b>be bold</b>",
+    authorName: "Test Person",
+    authorImageUrl: "http://localhost/image.jpg",
+    authorDescription: "Not a <i>real</i> person.",
+  };
+
+  beforeEach(async () => {
     env.PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "valid_client_id";
     env.PAYPAL_APP_SECRET = process.env.PAYPAL_APP_SECRET || "valid_app_secret";
     // default to the future for most tests
-    const future = new Date();
-    future.setHours(future.getHours() + 24);
-    env.FUNDING_DEADLINE = future.toISOString();
+    await setProject(defaultProject);
   });
 
   describe("payout", () => {
@@ -291,30 +307,6 @@ describe("Paypal Authenticated API", () => {
         const responseJson = await response.json<CounterResponse>();
         expect(responseJson.amount).toBe(0);
         expect(responseJson.orders).toHaveLength(0);
-      });
-      it("defaults to a funding deadline in the past when not set", async () => {
-        delete env.FUNDING_DEADLINE;
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/counter");
-        const responseJson = await response.json<CounterResponse>();
-        expect(new Date(responseJson.fundingDeadline) < new Date()).toBe(true);
-      });
-      it("returns the funding deadline", async () => {
-        const now = new Date();
-        const future = new Date();
-        future.setHours(now.getHours() + 1);
-        env.FUNDING_DEADLINE = future.toISOString();
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/counter");
-        const responseJson = await response.json<CounterResponse>();
-        expect(responseJson.fundingDeadline).toBe(future.toISOString());
-      });
-      it("returns the funding goal", async () => {
-        env.FUNDING_GOAL = "303";
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/counter");
-        const responseJson = await response.json<CounterResponse>();
-        expect(responseJson.fundingGoal).toBe(303);
       });
     });
     describe("PUT /contract/:contract", () => {
@@ -440,21 +432,31 @@ describe("Paypal Authenticated API", () => {
       });
       it("no refunds before deadline", async () => {
         const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/refunds");
+        const response = await counter.fetch(
+          "http://localhost/refunds?projectId=test"
+        );
         expect(response.status).toBe(404);
       });
       it("has list of refunds after deadline has passed", async () => {
-        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+        const fundingDeadline = "2023-01-01T01:01:01Z";
+        await setProject({ ...defaultProject, fundingDeadline });
         const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/refunds");
+        const response = await counter.fetch(
+          "http://localhost/refunds?projectId=test"
+        );
         expect(response.ok).toBeTruthy();
         const responseJson = await response.json<{ captureIds: string[] }>();
         expect(responseJson.captureIds).toHaveLength(2);
       });
       it("can delete a refund", async () => {
-        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+        await setProject({
+          ...defaultProject,
+          fundingDeadline: "2023-01-01T01:01:01Z",
+        });
         const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/refunds");
+        const response = await counter.fetch(
+          "http://localhost/refunds?projectId=test"
+        );
         expect(response.ok).toBeTruthy();
         const responseJson = await response.json<{ captureIds: string[] }>();
         expect(responseJson.captureIds).toHaveLength(2);
@@ -462,14 +464,19 @@ describe("Paypal Authenticated API", () => {
         await counter.fetch(`http://localhost/refunds/${captureId0}`, {
           method: "DELETE",
         });
-        const response2 = await counter.fetch("http://localhost/refunds");
+        const response2 = await counter.fetch(
+          "http://localhost/refunds?projectId=test"
+        );
         expect(response2.ok).toBeTruthy();
         const response2Json = await response2.json<{ captureIds: string[] }>();
         expect(response2Json.captureIds).toHaveLength(1);
       });
       it("no refund if deadline passed but project fully funded", async () => {
-        env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
-        env.FUNDING_GOAL = "100";
+        await setProject({
+          ...defaultProject,
+          fundingDeadline: "2023-01-01T01:01:01Z",
+          fundingGoal: "100",
+        });
         const counter = Counter.fromName(env, "test");
         await counter.fetch("http://localhost/contract/contractTwo", {
           method: "PUT",
@@ -483,7 +490,9 @@ describe("Paypal Authenticated API", () => {
             time: "2023-01-07T02:02:02.000Z",
           }),
         });
-        const response = await counter.fetch("http://localhost/refunds");
+        const response = await counter.fetch(
+          "http://localhost/refunds?projectId=test"
+        );
         expect(response.status).toBe(404);
       });
     });
@@ -496,6 +505,7 @@ describe("Paypal Authenticated API", () => {
 
   describe("fetch", () => {
     const ctx = new ExecutionContext();
+
     it("respond with CORS headers when configured", async () => {
       env.FRONTEND_URL = "http://localcors.com";
       const response = await worker.fetch(
@@ -557,7 +567,10 @@ describe("Paypal Authenticated API", () => {
         expect(response.ok).toBeFalsy();
       });
       it("fails when deadline has passed", async () => {
-        env.FUNDING_DEADLINE = "2023-01-01T00:00:00Z";
+        await setProject({
+          ...defaultProject,
+          fundingDeadline: "2023-01-01T00:00:00Z",
+        });
         const response = await worker.fetch(
           new Request("http://localhost/projects/test/contract", {
             method: "POST",
@@ -776,7 +789,10 @@ describe("Paypal Authenticated API", () => {
               ctx
             );
             expect(response3.status).toBe(404);
-            env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+            await setProject({
+              ...defaultProject,
+              fundingDeadline: "2023-01-01T01:01:01Z",
+            });
             const response4 = await worker.fetch(
               new Request("http://localhost/projects/test/refund", {
                 method: "POST",
@@ -840,7 +856,10 @@ describe("Paypal Authenticated API", () => {
             ctx
           );
           expect(response3.status).toBe(404);
-          env.FUNDING_DEADLINE = "2023-01-01T01:01:01Z";
+          await setProject({
+            ...defaultProject,
+            fundingDeadline: "2023-01-01T01:01:01Z",
+          });
           const response4 = await worker.fetch(
             new Request("http://localhost/projects/test/bonuses", {
               method: "GET",

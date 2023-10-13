@@ -23,8 +23,6 @@ export interface Env {
   PAYPAL_APP_SECRET?: string;
   FRONTEND_URL?: string;
   COUNTER?: DurableObjectNamespace;
-  FUNDING_DEADLINE?: string;
-  FUNDING_GOAL?: string;
   ADMIN_PASSWORD?: string;
   PROJECTS?: KVNamespace;
 }
@@ -88,13 +86,17 @@ export default {
     }
 
     router.post("/projects/:projectId/contract", async (req) => {
+      const projectId = req.params.projectId;
       const jsonBody = await req.json<{ amount: number }>();
       const amount = Number(jsonBody.amount.toFixed(2));
       const error = getInvalidAmountError(amount);
       if (error != null) {
         return Itty.error(400, { error });
       }
-      if (hasFundingDeadlinePassed(getFundingDeadline(env))) {
+      const projectString = await getProjects(env).get(projectId);
+      if (projectString == null) return Itty.error(404);
+      const project = JSON.parse(projectString) as Project;
+      if (hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(400, { error: "Funding deadline passed" });
       }
       const order = await createOrder(amount.toFixed(2), env);
@@ -160,7 +162,9 @@ export default {
       const projectId: string = req.params.projectId;
       const obj = Counter.fromName(env, projectId);
       const url = new URL(request.url);
-      const refunds = await obj.fetch(`${url.origin}/refunds`);
+      const refunds = await obj.fetch(
+        `${url.origin}/refunds?projectId=${projectId}`
+      );
       if (!refunds.ok) {
         return Itty.error(refunds.status);
       }
@@ -183,9 +187,12 @@ export default {
     router.get("/projects/:projectId/bonuses", withAdmin, (req) => {
       const origin = new URL(req.url).origin;
       const projectId = req.params.projectId;
-      return Counter.fromName(env, projectId).fetch(`${origin}/bonuses`, {
-        method: req.method,
-      });
+      return Counter.fromName(env, projectId).fetch(
+        `${origin}/bonuses?projectId=${projectId}`,
+        {
+          method: req.method,
+        }
+      );
     });
 
     router.delete("/projects/:projectId/bonuses/:orderID", withAdmin, (req) => {
@@ -230,8 +237,6 @@ export type Order = {
 export type CounterResponse = {
   amount: number;
   orders: Order[];
-  fundingDeadline: string;
-  fundingGoal: number;
 };
 
 export type BonusesResponse = {
@@ -302,8 +307,6 @@ export class Counter implements DurableObject {
             amount: order.amount,
           };
         }),
-        fundingDeadline: getFundingDeadline(this.env),
-        fundingGoal: getFundingGoal(this.env),
       };
     });
 
@@ -326,8 +329,15 @@ export class Counter implements DurableObject {
       return "";
     });
 
-    router.get("/refunds", async () => {
-      if (!hasFundingDeadlinePassed(getFundingDeadline(this.env))) {
+    router.get("/refunds", async (req) => {
+      if (req.query.projectId == null) return Itty.error(400);
+      if (Array.isArray(req.query.projectId)) return Itty.error(400);
+      const projectString = await getProjects(this.env).get(
+        req.query.projectId
+      );
+      if (projectString == null) return Itty.error(404);
+      const project = JSON.parse(projectString) as Project;
+      if (!hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(404);
       }
       const orderMap: OrderMap =
@@ -337,7 +347,7 @@ export class Counter implements DurableObject {
         (total, o) => total + o.amount,
         0
       );
-      if (totalAmount >= getFundingGoal(this.env)) return Itty.error(404);
+      if (totalAmount >= Number(project.fundingGoal)) return Itty.error(404);
 
       const captureIds = Object.values(orderMap)
         .filter((o) => !o.refunded)
@@ -365,8 +375,15 @@ export class Counter implements DurableObject {
       return {};
     });
 
-    router.get("/bonuses", async () => {
-      if (!hasFundingDeadlinePassed(getFundingDeadline(this.env))) {
+    router.get("/bonuses", async (req) => {
+      if (req.query.projectId == null) return Itty.error(400);
+      if (Array.isArray(req.query.projectId)) return Itty.error(400);
+      const projectString = await getProjects(this.env).get(
+        req.query.projectId
+      );
+      if (projectString == null) return Itty.error(404);
+      const project = JSON.parse(projectString) as Project;
+      if (!hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(404);
       }
       const orderMap: OrderMap =
@@ -376,7 +393,7 @@ export class Counter implements DurableObject {
         (total, o) => total + o.amount,
         0
       );
-      if (totalAmount >= getFundingGoal(this.env)) return Itty.error(404);
+      if (totalAmount >= Number(project.fundingGoal)) return Itty.error(404);
 
       const bonuses = Object.fromEntries(
         Object.entries(orderMap)
@@ -408,18 +425,6 @@ export class Counter implements DurableObject {
 
     return router.handle(request).then(Itty.json).catch(Itty.error);
   }
-}
-
-function getFundingDeadline(env: Env): string {
-  return typeof env.FUNDING_DEADLINE != "undefined"
-    ? new Date(env.FUNDING_DEADLINE).toISOString()
-    : "2023-01-01T01:01:01Z";
-}
-
-function getFundingGoal(env: Env): number {
-  return typeof env.FUNDING_GOAL != "undefined"
-    ? Number(env.FUNDING_GOAL)
-    : 850;
 }
 
 // For a fully working example, please see:

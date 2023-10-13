@@ -97,28 +97,30 @@ wrong.
 
 ### Project fully funded
 
-1. Fund the project to completion.
-2. The /refund route should return 404.
-3. Wait until deadline passed.
-4. The /refund route should return 404.
-5. No more funds are accepted.
-6. Navigate to /admin
-7. Type "admin" as username and <ADMIN_PASSWORD> as password.
-8. There should be no bonuses to pay out.
+1. Configure the project in /admin
+2. Fund the project to completion.
+3. The /refund route should return 404.
+4. Wait until deadline passed.
+5. The /refund route should return 404.
+6. No more funds are accepted.
+7. Navigate to /admin
+8. Type "admin" as username and <ADMIN_PASSWORD> as password.
+9. There should be no bonuses to pay out.
 
 ### Project not fully funded.
 
-1. Don't fully fund the project.
-2. The /refund route should return 404.
-3. Wait until the deadline passed.
-4. The /refund route should refund a funder until all funders have been
+1. Configure the project in /admin
+2. Don't fully fund the project.
+3. The /refund route should return 404.
+4. Wait until the deadline passed.
+5. The /refund route should refund a funder until all funders have been
    refunded.
-5. No more funds are accepted.
-6. Navigate to /admin
-7. Type "admin" as username and <ADMIN_PASSWORD> as password.
-8. There should be a list of bonuses that need to be payed out.
-9. Log-in to paypal and payout the bonuses manually marking them off as you go.
-10. Refresh the /admin page. THe marked off payments should not be visable.
+6. No more funds are accepted.
+7. Navigate to /admin
+8. Type "admin" as username and <ADMIN_PASSWORD> as password.
+9. There should be a list of bonuses that need to be payed out.
+10. Log-in to paypal and payout the bonuses manually marking them off as you go.
+11. Refresh the /admin page. THe marked off payments should not be visable.
 
 ## Documentation
 
