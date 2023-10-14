@@ -35,6 +35,8 @@ beforeEach(() => {
   project = {
     fundingGoal: "200",
     fundingDeadline: future.toISOString(),
+    refundBonusPercent: 5,
+    defaultPaymentAmount: 32,
     formHeading: "Test Form Heading",
     description: "<b>be bold</b>",
     authorName: "Test Person",
@@ -227,7 +229,7 @@ test("App in-progress", async () => {
   fireEvent.click(paypalButton);
   const fundedText = await screen.findByText(/funded! Thank you!/i);
   expect(fundedText).toBeInTheDocument();
-  expect(counter).toBe(89);
+  expect(counter).toBe(project.defaultPaymentAmount);
 });
 
 test("headerParenthesis", async () => {
@@ -243,10 +245,17 @@ test("headerParenthesis empty", async () => {
   expect(screen.queryByText("Refund Bonus ()")).not.toBeInTheDocument();
 });
 
-test("Payment defaults to $89", async () => {
+test("Payment defaults to project.defaultPaymentAmount", async () => {
   render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
-  expect(amountInput).toHaveValue(89);
+  expect(amountInput).toHaveValue(project.defaultPaymentAmount);
+});
+
+test("refundBonus displayed", async () => {
+  project.refundBonusPercent = 12;
+  project.defaultPaymentAmount = 13;
+  render(<MockApp />);
+  expect(await screen.findByText(/\$14.56/i));
 });
 
 test("Less $5 dollar not accepted", async () => {
@@ -397,12 +406,14 @@ test("AdminApp delete works", async () => {
 
 test("AdminApp Project Config Works", async () => {
   render(<MockAdminApp />);
-  async function changeInput(label: string, value: string) {
+  async function changeInput(label: string, value: string | number) {
     const input = await screen.findByLabelText(label);
     fireEvent.change(input, { target: { value: value } });
   }
   await changeInput("Funding Goal", "100");
   await changeInput("Funding Deadline", "2023-01-01T12:33");
+  await changeInput("Refund Bonus Percent", 5);
+  await changeInput("Default Payment Amount", 19);
   await changeInput("Form Heading", "This is a heading");
   await changeInput("Description", "This is a description");
   await changeInput("Author Name", "John Doe");
@@ -417,6 +428,8 @@ test("AdminApp Project Config Works", async () => {
     } else {
       expect(project.fundingGoal).toBe("100");
       expect(project.fundingDeadline).toBe("2023-01-01T10:33:00.000Z");
+      expect(project.refundBonusPercent).toBe(5);
+      expect(project.defaultPaymentAmount).toBe(19);
       expect(project.formHeading).toBe("This is a heading");
       expect(project.description).toBe("This is a description");
       expect(project.authorName).toBe("John Doe");

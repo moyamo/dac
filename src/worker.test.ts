@@ -205,6 +205,8 @@ describe("Paypal Authenticated API", () => {
   const defaultProject = {
     fundingGoal: "200",
     fundingDeadline: futureFundingDeadline,
+    refundBonusPercent: 20,
+    defaultPaymentAmount: 89,
     formHeading: "Test Form Heading",
     description: "<b>be bold</b>",
     authorName: "Test Person",
@@ -907,6 +909,8 @@ describe("Paypal Authenticated API", () => {
                   project: {
                     fundingGoal: "200",
                     fundingDeadline: "2023-01-01T12:01:01.000Z",
+                    refundBonusPercent: 5,
+                    defaultPaymentAmount: 10,
                     formHeading: "Test Form Heading",
                     description: "<b>be bold</b>",
                     authorName: "Test Person",
@@ -932,8 +936,51 @@ describe("Paypal Authenticated API", () => {
             expect(jsonBody.project.fundingDeadline).toBe(
               "2023-01-01T12:01:01.000Z"
             );
+            expect(jsonBody.project.refundBonusPercent).toBe(5);
+            expect(jsonBody.project.defaultPaymentAmount).toBe(10);
             expect(jsonBody.project.formHeading).toBe("Test Form Heading");
             expect(jsonBody.project.description).toBe("<b>be bold</b>");
+            expect(jsonBody.project.authorName).toBe("Test Person");
+            expect(jsonBody.project.authorImageUrl).toBe(
+              "http://localhost/image.jpgl"
+            );
+            expect(jsonBody.project.authorDescription).toBe(
+              "Not a <i>real</i> person."
+            );
+          });
+        });
+        describe("GET /projects/:projectId", () => {
+          it("refundBonusPercent defaults to 20 and defaultPaymentAmount to 89", async () => {
+            if (env.PROJECTS == null) throw Error("PROJECTS undefined");
+            await env.PROJECTS.put(
+              "myproject",
+              JSON.stringify({
+                fundingGoal: "200",
+                fundingDeadline: "2023-01-01T12:01:01.000Z",
+                formHeading: "Test Form Heading",
+                description: "<b>be bold</b>",
+                authorName: "Test Person",
+                authorImageUrl: "http://localhost/image.jpgl",
+                authorDescription: "Not a <i>real</i> person.",
+              })
+            );
+            const response = await worker.fetch(
+              new Request("http://localhost/projects/myproject", {
+                method: "GET",
+              }),
+              env,
+              ctx
+            );
+            expect(response.status).toBe(200);
+            const jsonBody = await response.json<{ project: Project }>();
+            expect(jsonBody.project.fundingGoal).toBe("200");
+            expect(jsonBody.project.fundingDeadline).toBe(
+              "2023-01-01T12:01:01.000Z"
+            );
+            expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+            expect(jsonBody.project.description).toBe("<b>be bold</b>");
+            expect(jsonBody.project.refundBonusPercent).toBe(20);
+            expect(jsonBody.project.defaultPaymentAmount).toBe(89);
             expect(jsonBody.project.authorName).toBe("Test Person");
             expect(jsonBody.project.authorImageUrl).toBe(
               "http://localhost/image.jpgl"

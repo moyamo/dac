@@ -139,7 +139,9 @@ function App(props: AppProps) {
     ReactRouterDom.useLoaderData() as ProjectLoader;
   if (typeof projectId === "undefined") throw Error("projectId undefined");
   const [funded, setFunded] = React.useState(false);
-  const [amountRef, setAmount] = useStateRef(89);
+  const [amountRef, setAmount] = useStateRef(
+    project?.defaultPaymentAmount ?? 89
+  );
   const [progress, setProgress] = React.useState(-1);
 
   const [orders, setOrders] = React.useState<Order[]>([]);
@@ -239,7 +241,11 @@ function App(props: AppProps) {
                     <>
                       {`Thanks for pledging $${amountRef.current}! If we do not reach our goal you will get a`}{" "}
                       <strong>
-                        {`$${(amountRef.current * 1.2).toFixed(2)}`}
+                        {`$${(
+                          (amountRef.current *
+                            (100.0 + project.refundBonusPercent)) /
+                          100.0
+                        ).toFixed(2)}`}
                       </strong>
                       {` refund!`}
                     </>
@@ -476,7 +482,7 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
   const name = onFirstChar((c) => c.toLowerCase())(Name) as keyof Project;
   const id = "ConfigForm" + Name;
 
-  function projectToInput(project: Partial<Project>): string {
+  function projectToInput(project: Partial<Project>): string | number {
     let value = project[name] || "";
     if (type == "datetime-local" && value != "") {
       // See https://stackoverflow.com/questions/30166338/setting-value-of-datetime-local-from-date
@@ -487,9 +493,12 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
     return value;
   }
 
-  function inputToProject(value: string): string {
+  function inputToProject(value: string | number): string | number {
     if (type == "datetime-local" && value != "") {
       value = new Date(value).toISOString();
+    }
+    if (type == "number" && typeof value == "string") {
+      value = Number(value);
     }
     return value;
   }
@@ -557,6 +566,8 @@ function ConfigForm(props: ConfigFormProps) {
       >
         <ProjectInput type="text" label="Funding Goal" />
         <ProjectInput type="datetime-local" label="Funding Deadline" />
+        <ProjectInput type="number" label="Refund Bonus Percent" />
+        <ProjectInput type="number" label="Default Payment Amount" />
         <ProjectInput type="text" label="Form Heading" />
         <ProjectInput type="textarea" label="Description" />
         <ProjectInput type="text" label="Author Name" />

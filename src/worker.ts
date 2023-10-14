@@ -30,6 +30,8 @@ export interface Env {
 export type Project = {
   fundingDeadline: string;
   fundingGoal: string;
+  refundBonusPercent: number;
+  defaultPaymentAmount: number;
   formHeading: string;
   description: string;
   authorName: string;
@@ -55,11 +57,32 @@ export function withAdmin<R extends Request>(req: R, env: Env) {
     return unauthorized;
 }
 
-function getProjects(env: Env): KVNamespace {
+async function getProject(
+  env: Env,
+  projectId: string
+): Promise<Project | null> {
   if (typeof env.PROJECTS == "undefined") {
     throw Error("KV PROJECTS not bound");
   }
-  return env.PROJECTS;
+  const projectString = await env.PROJECTS.get(projectId);
+  if (projectString == null) return null;
+  const project = JSON.parse(projectString) as Record<string, unknown>;
+
+  // migrations
+  if (typeof project.refundBonusPercent == "undefined") {
+    project.refundBonusPercent = 20;
+  }
+  if (typeof project.defaultPaymentAmount == "undefined") {
+    project.defaultPaymentAmount = 89;
+  }
+  return project as Project;
+}
+
+async function setProject(env: Env, projectId: string, project: Project) {
+  if (typeof env.PROJECTS == "undefined") {
+    throw Error("KV PROJECTS not bound");
+  }
+  return await env.PROJECTS.put(projectId, JSON.stringify(project));
 }
 
 export default {
@@ -93,9 +116,8 @@ export default {
       if (error != null) {
         return Itty.error(400, { error });
       }
-      const projectString = await getProjects(env).get(projectId);
-      if (projectString == null) return Itty.error(404);
-      const project = JSON.parse(projectString) as Project;
+      const project = await getProject(env, projectId);
+      if (project == null) return Itty.error(404);
       if (hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(400, { error: "Funding deadline passed" });
       }
@@ -107,6 +129,8 @@ export default {
       const origin = new URL(req.url).origin;
       const orderID = req.params.orderID;
       const projectId = req.params.projectId;
+      const project = await getProject(env, projectId);
+      if (project == null) return Itty.error(404);
       const response = await capturePayment(orderID, env);
       if (response.purchase_units.length != 1)
         throw new Error(
@@ -125,11 +149,19 @@ export default {
         " " +
         response.payment_source.paypal.name.surname;
       const amount = Number(capture.amount.value);
+      const refundBonusPercent = project.refundBonusPercent;
       const time = new Date().toISOString();
       const obj = Counter.fromName(env, projectId);
       await obj.fetch(`${origin}/contract/${orderID}`, {
         method: "PUT",
-        body: JSON.stringify({ returnAddress, captureId, amount, name, time }),
+        body: JSON.stringify({
+          returnAddress,
+          captureId,
+          amount,
+          name,
+          refundBonusPercent,
+          time,
+        }),
       });
       return Itty.json();
     });
@@ -145,16 +177,15 @@ export default {
 
     router.get("/projects/:projectId", async (req) => {
       const { projectId } = req.params;
-      const projectString = await getProjects(env).get(projectId);
-      if (projectString == null) return Itty.error(404);
-      const project: Project = JSON.parse(projectString) as Project;
+      const project = await getProject(env, projectId);
+      if (project == null) return Itty.error(404);
       return { project: project };
     });
 
     router.put("/projects/:projectId", withAdmin, async (req) => {
       const { projectId } = req.params;
       const jsonBody = await req.json<{ project: Project }>();
-      await getProjects(env).put(projectId, JSON.stringify(jsonBody.project));
+      await setProject(env, projectId, jsonBody.project);
       return {};
     });
 
@@ -225,6 +256,7 @@ type PutContractBody = {
   captureId: string;
   amount: number;
   name: string;
+  refundBonusPercent: number;
   time: string;
 };
 
@@ -320,7 +352,9 @@ export class Counter implements DurableObject {
         amount: body.amount,
         bonus: {
           refunded: false,
-          amount: Number((body.amount * 0.2).toFixed(2)),
+          amount: Number(
+            ((body.amount * body.refundBonusPercent) / 100.0).toFixed(2)
+          ),
         },
         name: body.name,
         time: body.time,
@@ -332,11 +366,8 @@ export class Counter implements DurableObject {
     router.get("/refunds", async (req) => {
       if (req.query.projectId == null) return Itty.error(400);
       if (Array.isArray(req.query.projectId)) return Itty.error(400);
-      const projectString = await getProjects(this.env).get(
-        req.query.projectId
-      );
-      if (projectString == null) return Itty.error(404);
-      const project = JSON.parse(projectString) as Project;
+      const project = await getProject(this.env, req.query.projectId);
+      if (project == null) return Itty.error(404);
       if (!hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(404);
       }
@@ -378,11 +409,8 @@ export class Counter implements DurableObject {
     router.get("/bonuses", async (req) => {
       if (req.query.projectId == null) return Itty.error(400);
       if (Array.isArray(req.query.projectId)) return Itty.error(400);
-      const projectString = await getProjects(this.env).get(
-        req.query.projectId
-      );
-      if (projectString == null) return Itty.error(404);
-      const project = JSON.parse(projectString) as Project;
+      const project = await getProject(this.env, req.query.projectId);
+      if (project == null) return Itty.error(404);
       if (!hasFundingDeadlinePassed(project.fundingDeadline)) {
         return Itty.error(404);
       }
