@@ -42,6 +42,7 @@ beforeEach(() => {
     authorName: "Test Person",
     authorImageUrl: "http://localhost/image.jpg",
     authorDescription: "Not a <i>real</i> person.",
+    isDraft: false,
   };
 });
 
@@ -306,6 +307,18 @@ test("Custom amount of $32 dollars accepted", async () => {
   expect(counter).toBe(32);
 });
 
+test("Draft Project does not accept Payment", async () => {
+  project.isDraft = true;
+  render(<MockApp />);
+  const amountInput = await screen.findByLabelText("Amount ($)");
+  fireEvent.change(amountInput, { target: { value: 20 } });
+  expect(await screen.findByText(/draft/i)).toBeInTheDocument();
+  const paypalButton = await screen.findByText("PayPal");
+  fireEvent.click(paypalButton);
+  await waitFor(() => expect(paypalTransactionValid).toBe(false));
+  expect(counter).toBe(0);
+});
+
 test("Funding deadline passed", async () => {
   project.fundingDeadline = "2023-01-01T01:03:00Z";
   render(<MockApp />);
@@ -466,7 +479,10 @@ describe("EditApp Validation", () => {
         .map((w) => w[0].toUpperCase() + w.slice(1))
         .join("");
       const name = Name[0].toLowerCase() + Name.slice(1);
-      const dynamicProject = project as Record<string, string | number>;
+      const dynamicProject = project as Record<
+        string,
+        string | number | boolean
+      >;
       const oldProjectValue = dynamicProject[name];
       await changeInput(label, "");
       expect(

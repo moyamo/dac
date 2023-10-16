@@ -118,7 +118,9 @@ async function projectLoader({
   if (typeof projectId == "undefined") {
     return { error: "project undefined" };
   }
-  const response = await fetch(`${WORKER_URL}/projects/${projectId}`);
+  const response = await fetch(`${WORKER_URL}/projects/${projectId}`, {
+    credentials: "include",
+  });
   if (response.ok) {
     const r = await response.json<{ project: Project }>();
     return {
@@ -191,6 +193,13 @@ function App(props: AppProps) {
                   step="1"
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
+                {!project.isDraft ? null : (
+                  <p>
+                    This is a <strong>draft</strong> project. The PayPal button
+                    will not work.
+                  </p>
+                )}
+
                 <PaypalButtons
                   style={{
                     label: "pay",
@@ -202,6 +211,9 @@ function App(props: AppProps) {
                   }
                   onClick={(_data: unknown, actions: OnClickActions) => {
                     const amount = amountRef.current;
+                    if (project.isDraft) {
+                      return actions.reject();
+                    }
                     if (getInvalidAmountError(amount) == null) {
                       return actions.resolve();
                     } else {
@@ -495,17 +507,21 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
 
   function projectToInput(project: Partial<Project>): string | number {
     let value = project[name] || "";
-    if (type == "datetime-local" && value != "") {
+    if (type == "datetime-local" && value != "" && typeof value == "string") {
       // See https://stackoverflow.com/questions/30166338/setting-value-of-datetime-local-from-date
       const valueD = new Date(value);
       valueD.setMinutes(valueD.getMinutes() - valueD.getTimezoneOffset());
       value = valueD.toISOString().slice(0, 16);
     }
+    // This is just to get the code to type check
+    if (typeof value == "boolean") {
+      return value ? "true" : "false";
+    }
     return value;
   }
 
-  function inputToProject(value: string | number): string | number {
-    if (type == "datetime-local" && value != "") {
+  function inputToProject(value: string | number): string | number | boolean {
+    if (type == "datetime-local" && value != "" && typeof value == "string") {
       value = new Date(value).toISOString();
     }
     if (type == "number" && typeof value == "string") {
@@ -600,6 +616,10 @@ function EditApp() {
               setError(projectError[errorKey]);
               window.scrollTo(0, 0);
               return;
+            }
+            if (typeof project.isDraft == "undefined") {
+              // This GET /projects/:projectId returned 404, so the project is new
+              project.isDraft = true;
             }
             void (async () => {
               const r = await fetch(`${WORKER_URL}/projects/${projectId}`, {

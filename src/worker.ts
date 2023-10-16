@@ -37,24 +37,40 @@ export type Project = {
   authorName: string;
   authorImageUrl: string;
   authorDescription: string;
+  isDraft: boolean;
 };
 
-export function withAdmin<R extends Request>(req: R, env: Env) {
-  const unauthorized = Itty.text("", {
+export function getAdmin<R extends Request>(req: R, env: Env): "admin" | null {
+  if (!env.ADMIN_PASSWORD) return null;
+  const authorization = req.headers.get("Authorization");
+  if (authorization == null) return null;
+  const authSplit = authorization.split(" ", 2);
+  if (authSplit[0] != "Basic" || authSplit.length == 1) return null;
+  const basic = Buffer.from(authSplit[1], "base64").toString("ascii");
+  const basicSplit = basic.split(":", 2);
+  if (basicSplit.length != 2) return null;
+  const [username, password] = basicSplit;
+  if (username != "admin" || password != env.ADMIN_PASSWORD) return null;
+  return "admin";
+}
+
+function requestBasicAuthentication() {
+  return Itty.text("", {
     status: 401,
     headers: { "WWW-Authenticate": "Basic" },
   });
-  if (!env.ADMIN_PASSWORD) return unauthorized;
-  const authorization = req.headers.get("Authorization");
-  if (authorization == null) return unauthorized;
-  const authSplit = authorization.split(" ", 2);
-  if (authSplit[0] != "Basic" || authSplit.length == 1) return unauthorized;
-  const basic = Buffer.from(authSplit[1], "base64").toString("ascii");
-  const basicSplit = basic.split(":", 2);
-  if (basicSplit.length != 2) return unauthorized;
-  const [username, password] = basicSplit;
-  if (username != "admin" || password != env.ADMIN_PASSWORD)
-    return unauthorized;
+}
+
+export function withAdmin<R extends Request>(req: R, env: Env) {
+  const admin = getAdmin(req, env);
+  if (admin == null) return requestBasicAuthentication();
+}
+
+function withUser(req: Itty.IRequest, env: Env) {
+  const admin = getAdmin(req, env);
+  if (admin != null) {
+    req.user = admin;
+  }
 }
 
 async function getProject(
@@ -74,6 +90,11 @@ async function getProject(
   }
   if (typeof project.defaultPaymentAmount == "undefined") {
     project.defaultPaymentAmount = 89;
+  }
+  if (typeof project.isDraft == "undefined") {
+    // If the project was created before the draft feature was added then it
+    // must be published.
+    project.isDraft = false;
   }
   return project as Project;
 }
@@ -175,10 +196,12 @@ export default {
       return count;
     });
 
-    router.get("/projects/:projectId", async (req) => {
+    router.get("/projects/:projectId", withUser, async (req) => {
       const { projectId } = req.params;
       const project = await getProject(env, projectId);
       if (project == null) return Itty.error(404);
+      if (project.isDraft && req.user != "admin")
+        return requestBasicAuthentication();
       return { project: project };
     });
 

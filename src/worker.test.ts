@@ -212,6 +212,7 @@ describe("Paypal Authenticated API", () => {
     authorName: "Test Person",
     authorImageUrl: "http://localhost/image.jpg",
     authorDescription: "Not a <i>real</i> person.",
+    isDraft: false,
   };
 
   beforeEach(async () => {
@@ -916,6 +917,7 @@ describe("Paypal Authenticated API", () => {
                     authorName: "Test Person",
                     authorImageUrl: "http://localhost/image.jpgl",
                     authorDescription: "Not a <i>real</i> person.",
+                    isDraft: false,
                   },
                 }),
               }),
@@ -947,10 +949,11 @@ describe("Paypal Authenticated API", () => {
             expect(jsonBody.project.authorDescription).toBe(
               "Not a <i>real</i> person."
             );
+            expect(jsonBody.project.isDraft).toBe(false);
           });
         });
         describe("GET /projects/:projectId", () => {
-          it("refundBonusPercent defaults to 20 and defaultPaymentAmount to 89", async () => {
+          it("refundBonusPercent defaults to 20, defaultPaymentAmount to 89 and isDraft to false", async () => {
             if (env.PROJECTS == null) throw Error("PROJECTS undefined");
             await env.PROJECTS.put(
               "myproject",
@@ -988,6 +991,7 @@ describe("Paypal Authenticated API", () => {
             expect(jsonBody.project.authorDescription).toBe(
               "Not a <i>real</i> person."
             );
+            expect(jsonBody.project.isDraft).toBe(false);
           });
         });
       });
