@@ -98,8 +98,12 @@ export function routes({
     },
     {
       path: "/projects/:projectId/admin",
-      loader: projectLoader,
       element: <AdminApp />,
+    },
+    {
+      path: "/projects/:projectId/edit",
+      loader: projectLoader,
+      element: <EditApp />,
     },
   ];
 }
@@ -396,8 +400,6 @@ export function AdminApp() {
       <h1>Admin App</h1>
       <h2>Pending Payouts</h2>
       <PendingPayoutsTable projectId={projectId} />
-      <h2>Config</h2>
-      <ConfigForm projectId={projectId} />
     </>
   );
 }
@@ -528,12 +530,9 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
   );
 }
 
-type ConfigFormProps = {
-  projectId: string;
-};
-
-function ConfigForm(props: ConfigFormProps) {
-  const { projectId } = props;
+function EditApp() {
+  const { projectId } = ReactRouterDom.useParams();
+  if (typeof projectId == "undefined") throw Error("projectId undefined");
   const { project: initialProject, error: initialError } =
     ReactRouterDom.useLoaderData() as ProjectLoader;
   const [project, setProject] = React.useState<Partial<Project>>(
@@ -545,6 +544,7 @@ function ConfigForm(props: ConfigFormProps) {
   return (
     <ProjectStateContext.Provider value={[project, setProject]}>
       {error == null ? null : <div className="error">{error}</div>}
+      <h2>Edit Project</h2>
       <form
         role="form"
         onSubmit={(e) => {

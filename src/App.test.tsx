@@ -177,7 +177,21 @@ type MockAppProps = {
   headerParenthesis?: string;
 };
 
-function MockApp({ headerParenthesis }: MockAppProps) {
+function MockApp(props: MockAppProps) {
+  return <MockAppAtRoute route="/projects/test" {...props} />;
+}
+
+function MockAdminApp() {
+  return <MockAppAtRoute route="/projects/test/admin" />;
+}
+
+function MockEditApp() {
+  return <MockAppAtRoute route="/projects/test/edit" />;
+}
+
+type MockAppAtRouteProps = { route: string } & MockAppProps;
+
+function MockAppAtRoute({ route, headerParenthesis }: MockAppAtRouteProps) {
   return (
     <ReactRouterDom.RouterProvider
       router={ReactRouterDom.createMemoryRouter(
@@ -186,20 +200,7 @@ function MockApp({ headerParenthesis }: MockAppProps) {
           headerParenthesis: headerParenthesis,
         }),
         {
-          initialEntries: ["/projects/test"],
-        }
-      )}
-    />
-  );
-}
-
-function MockAdminApp() {
-  return (
-    <ReactRouterDom.RouterProvider
-      router={ReactRouterDom.createMemoryRouter(
-        routes({ PaypalButtons: MockPaypalButtons }),
-        {
-          initialEntries: ["/projects/test/admin"],
+          initialEntries: [route],
         }
       )}
     />
@@ -404,8 +405,8 @@ test("AdminApp delete works", async () => {
   });
 });
 
-test("AdminApp Project Config Works", async () => {
-  render(<MockAdminApp />);
+test("EditApp Works", async () => {
+  render(<MockEditApp />);
   async function changeInput(label: string, value: string | number) {
     const input = await screen.findByLabelText(label);
     fireEvent.change(input, { target: { value: value } });
