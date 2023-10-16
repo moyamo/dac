@@ -418,7 +418,7 @@ test("EditApp Works", async () => {
   await changeInput("Form Heading", "This is a heading");
   await changeInput("Description", "This is a description");
   await changeInput("Author Name", "John Doe");
-  await changeInput("Author Image Url", "/image.jpeg");
+  await changeInput("Author Image URL", "/image.jpeg");
   await changeInput("Author Description", "This is author description");
 
   const form = await screen.findByRole("form");
@@ -437,5 +437,73 @@ test("EditApp Works", async () => {
       expect(project.authorImageUrl).toBe("/image.jpeg");
       expect(project.authorDescription).toBe("This is author description");
     }
+  });
+});
+
+describe("EditApp Validation", () => {
+  async function changeInput(label: string, value: string | number) {
+    const input = await screen.findByLabelText(label);
+    fireEvent.change(input, { target: { value: value } });
+  }
+
+  beforeEach(async () => {
+    render(<MockEditApp />);
+    await changeInput("Funding Goal", "100");
+    await changeInput("Funding Deadline", "2023-01-01T12:33");
+    await changeInput("Refund Bonus Percent", 5);
+    await changeInput("Default Payment Amount", 19);
+    await changeInput("Form Heading", "This is a heading");
+    await changeInput("Description", "This is a description");
+    await changeInput("Author Name", "John Doe");
+    await changeInput("Author Image URL", "/image.jpeg");
+    await changeInput("Author Description", "This is author description");
+  });
+  describe("prevents empty", () => {
+    async function testPreventsEmpty(label: string) {
+      const Name = label
+        .split(" ")
+        .map((w) => w.toLowerCase())
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join("");
+      const name = Name[0].toLowerCase() + Name.slice(1);
+      const dynamicProject = project as Record<string, string | number>;
+      const oldProjectValue = dynamicProject[name];
+      await changeInput(label, "");
+      expect(
+        await screen.findByText(`Please enter a ${label}`)
+      ).toBeInTheDocument();
+      const form = await screen.findByRole("form");
+      fireEvent.submit(form);
+      // Wait for form submission to complete
+      await new Promise((r) => setTimeout(r, 20));
+      expect(dynamicProject[name]).toBe(oldProjectValue);
+    }
+    it("funding goal", async () => {
+      await testPreventsEmpty("Funding Goal");
+    });
+    it("funding deadline", async () => {
+      await testPreventsEmpty("Funding Deadline");
+    });
+    it("refund bonus percent", async () => {
+      await testPreventsEmpty("Refund Bonus Percent");
+    });
+    it("default payment amount", async () => {
+      await testPreventsEmpty("Default Payment Amount");
+    });
+    it("form heading", async () => {
+      await testPreventsEmpty("Form Heading");
+    });
+    it("description", async () => {
+      await testPreventsEmpty("Description");
+    });
+    it("author name", async () => {
+      await testPreventsEmpty("Author Name");
+    });
+    it("author image url", async () => {
+      await testPreventsEmpty("Author Image URL");
+    });
+    it("author description", async () => {
+      await testPreventsEmpty("Author Description");
+    });
   });
 });

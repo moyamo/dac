@@ -467,18 +467,27 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
   );
 }
 
-const ProjectStateContext = React.createContext<
-  [Partial<Project>, React.Dispatch<React.SetStateAction<Partial<Project>>>]
+type UseState<T> = [T, React.Dispatch<React.SetStateAction<T>>];
+
+const ProjectStateContext = React.createContext<UseState<Partial<Project>>>([
+  {},
+  (_mP) => null,
+]);
+
+const ProjectErrorContext = React.createContext<
+  UseState<Record<string, string>>
 >([{}, (_mP) => null]);
 
 function ProjectInput({ type, label }: { type: string; label: string }) {
   const [project, setProject] = React.useContext(ProjectStateContext);
+  const [projectError, setProjectError] = React.useContext(ProjectErrorContext);
   function onFirstChar(f: (s: string) => string) {
     // Returns function which applies f to first character of the first argument
     return (s: string) => f(s.slice(0, 1)) + s.slice(1);
   }
   const Name = label
     .split(" ")
+    .map((w) => w.toLowerCase())
     .map(onFirstChar((c) => c.toUpperCase()))
     .join("");
   const name = onFirstChar((c) => c.toLowerCase())(Name) as keyof Project;
@@ -505,11 +514,34 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
     return value;
   }
 
+  const errorMessage =
+    project[name] == "" || project[name] == null
+      ? `Please enter a ${label}`
+      : null;
+  const errorMessageId = `${id}Error`;
+
+  // It's better to call setState in useEffect and not while rendering.
+  React.useEffect(() => {
+    if (errorMessage != projectError[name]) {
+      setProjectError((projectError) => {
+        if (errorMessage == null) {
+          delete projectError[name];
+        } else {
+          projectError[name] = errorMessage;
+        }
+        return projectError;
+      });
+    }
+  }, [project]);
+
   const commonProps = {
     key: id,
     name,
     value: projectToInput(project),
     id,
+    ["aria-required"]: true,
+    ["aria-invalid"]: errorMessage ? true : false,
+    ["aria-describedby"]: errorMessage ? errorMessageId : undefined,
     onChange(e: React.ChangeEvent<HTMLInputElement & HTMLTextAreaElement>) {
       const value = inputToProject(e.target.value);
       return setProject((project) => {
@@ -526,6 +558,11 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
       ) : (
         <input type={type} {...commonProps} />
       )}
+      {errorMessage ? (
+        <div id={errorMessageId} className="error">
+          {errorMessage}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -538,43 +575,59 @@ function EditApp() {
   const [project, setProject] = React.useState<Partial<Project>>(
     initialProject || {}
   );
+  const [projectError, setProjectError] = React.useState<
+    Record<string, string>
+  >({});
   const [error, setError] = React.useState<string | null>(initialError || null);
+  const errorRef = React.createRef<HTMLDivElement>();
   const navigate = ReactRouterDom.useNavigate();
 
   return (
     <ProjectStateContext.Provider value={[project, setProject]}>
-      {error == null ? null : <div className="error">{error}</div>}
-      <h2>Edit Project</h2>
-      <form
-        role="form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void (async () => {
-            const r = await fetch(`${WORKER_URL}/projects/${projectId}`, {
-              method: "PUT",
-              credentials: "include",
-              body: JSON.stringify({ project: project }),
-            });
-            if (!r.ok) {
-              setError(`${r.status} ${r.statusText}`);
-            } else {
-              setError(null);
-              navigate(0); // reload
+      <ProjectErrorContext.Provider value={[projectError, setProjectError]}>
+        <h2>Edit Project</h2>
+        {error == null ? null : (
+          <div ref={errorRef} className="error">
+            {error}
+          </div>
+        )}
+        <form
+          role="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (Object.keys(projectError).length > 0) {
+              const errorKey = Object.keys(projectError)[0];
+              setError(projectError[errorKey]);
+              window.scrollTo(0, 0);
+              return;
             }
-          })();
-        }}
-      >
-        <ProjectInput type="text" label="Funding Goal" />
-        <ProjectInput type="datetime-local" label="Funding Deadline" />
-        <ProjectInput type="number" label="Refund Bonus Percent" />
-        <ProjectInput type="number" label="Default Payment Amount" />
-        <ProjectInput type="text" label="Form Heading" />
-        <ProjectInput type="textarea" label="Description" />
-        <ProjectInput type="text" label="Author Name" />
-        <ProjectInput type="text" label="Author Image Url" />
-        <ProjectInput type="textarea" label="Author Description" />
-        <input type="submit" value="Submit" />
-      </form>
+            void (async () => {
+              const r = await fetch(`${WORKER_URL}/projects/${projectId}`, {
+                method: "PUT",
+                credentials: "include",
+                body: JSON.stringify({ project: project }),
+              });
+              if (!r.ok) {
+                setError(`${r.status} ${r.statusText}`);
+              } else {
+                setError(null);
+                navigate(0); // reload
+              }
+            })();
+          }}
+        >
+          <ProjectInput type="text" label="Funding Goal" />
+          <ProjectInput type="datetime-local" label="Funding Deadline" />
+          <ProjectInput type="number" label="Refund Bonus Percent" />
+          <ProjectInput type="number" label="Default Payment Amount" />
+          <ProjectInput type="text" label="Form Heading" />
+          <ProjectInput type="textarea" label="Description" />
+          <ProjectInput type="text" label="Author Name" />
+          <ProjectInput type="text" label="Author Image URL" />
+          <ProjectInput type="textarea" label="Author Description" />
+          <input type="submit" value="Submit" />
+        </form>
+      </ProjectErrorContext.Provider>
     </ProjectStateContext.Provider>
   );
 }
