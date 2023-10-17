@@ -10,6 +10,9 @@ import * as Paypal from "./paypalTypes";
 
 import worker, {
   Env,
+  aclResourceToAclKind,
+  getAcl,
+  getAclPermissions,
   generateAccessToken,
   payout,
   createOrder,
@@ -190,6 +193,145 @@ describe("withAdmin", () => {
       expect(r.status).toBe(401);
       expect(r.headers.get("WWW-Authenticate")).toBe("Basic");
     }
+  });
+});
+
+describe("ACLs", () => {
+  describe("aclResourceToAclKind", () => {
+    it("returns null when resource is invalid", () => {
+      expect(aclResourceToAclKind("/invalid_resource/")).toBe(null);
+    });
+    it("returns an AclKind when given a project", () => {
+      const aclKind = aclResourceToAclKind("/projects/test");
+      if (aclKind == null) {
+        expect(aclKind).not.toBe(null);
+      } else {
+        expect(aclKind.allPermissions).toStrictEqual(["edit"]);
+      }
+    });
+  });
+  describe("getAcl", () => {
+    it("returns empty ACL when no resource is defined", async () => {
+      const acl = await getAcl(env, "/projects/test");
+      expect(Object.keys(acl.grants)).toHaveLength(0);
+    });
+    it("returns valid ACL when defined", async () => {
+      if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
+      await env.ACLS.put(
+        "/projects/test",
+        JSON.stringify({ grants: { ["user@example.com"]: ["edit"] } })
+      );
+      const acl = await getAcl(env, "/projects/test");
+      expect(acl.grants["user@example.com"]).toStrictEqual(["edit"]);
+    });
+  });
+  describe("getAclPermissions", () => {
+    it("admin gets all permissions for project", async () => {
+      const permissions = await getAclPermissions(
+        env,
+        "/projects/test",
+        "admin"
+      );
+      expect(permissions).toStrictEqual(["edit"]);
+    });
+    it("gives an empty list when there are no permissions", async () => {
+      const permissions = await getAclPermissions(
+        env,
+        "/projects/test",
+        "user@example.com"
+      );
+      expect(permissions).toStrictEqual([]);
+    });
+    it("returns permissions when they are defined", async () => {
+      if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
+      await env.ACLS.put(
+        "/projects/test",
+        JSON.stringify({ grants: { ["user@example.com"]: ["edit"] } })
+      );
+      const permissions = await getAclPermissions(
+        env,
+        "/projects/test",
+        "user@example.com"
+      );
+      expect(permissions).toStrictEqual(["edit"]);
+    });
+  });
+  describe("fetch", () => {
+    const ctx = new ExecutionContext();
+    async function workerFetch(
+      method: string,
+      path: string,
+      other: RequestInit
+    ) {
+      return await worker.fetch(
+        new Request(`http://localhost${path}`, {
+          method,
+          ...other,
+        }),
+        env,
+        ctx
+      );
+    }
+    describe("POST /acls/grants", () => {
+      const body = JSON.stringify({
+        grant: {
+          user: "user@example.com",
+          resource: "/projects/test",
+          permissions: ["edit"],
+        },
+      });
+      it("responds 401 when unauthenticated", async () => {
+        const response = await workerFetch("POST", "/acls/grants", { body });
+        expect(response.status).toBe(401);
+      });
+      describe("as admin", () => {
+        let headers = {};
+        beforeEach(() => {
+          env.ADMIN_PASSWORD = "correct horse battery staples";
+          const encodedUsernameAndPassword = Buffer.from(
+            "admin:correct horse battery staples"
+          ).toString("base64");
+          headers = { Authorization: `Basic ${encodedUsernameAndPassword}` };
+        });
+        it("responds 400 when using invalid permission", async () => {
+          const response = await workerFetch("POST", "/acls/grants", {
+            headers,
+            body: JSON.stringify({
+              grant: {
+                user: "user@example.com",
+                resource: "/projects/test",
+                permissions: ["invalid"],
+              },
+            }),
+          });
+          expect(response.status).toBe(400);
+        });
+        it("responds 400 when using invalid resource", async () => {
+          const response = await workerFetch("POST", "/acls/grants", {
+            headers,
+            body: JSON.stringify({
+              grant: {
+                user: "user@example.com",
+                resource: "/invalid",
+                permissions: ["edit"],
+              },
+            }),
+          });
+          expect(response.status).toBe(400);
+        });
+        it("works", async () => {
+          if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
+          const response = await workerFetch("POST", "/acls/grants", {
+            headers,
+            body,
+          });
+          expect(response.status).toBe(200);
+          expect(await env.ACLS.get("/projects/test")).toBe(
+            '{"grants":{"user@example.com":["edit"]}}'
+          );
+        });
+      });
+    });
   });
 });
 

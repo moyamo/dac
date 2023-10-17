@@ -4,7 +4,8 @@ compatibility_date = "2023-04-26"
 compatibility_flags = [ "nodejs_compat" ]
 
 kv_namespaces = [
-  { binding = "PROJECTS", id = "aefc757a99c94067a4a0f2eada05aac0", preview_id = "1e6f338da1024fe289b395f0c70c3a65" }
+  { binding = "PROJECTS", id = "aefc757a99c94067a4a0f2eada05aac0", preview_id = "1e6f338da1024fe289b395f0c70c3a65" },
+  { binding = "ACLS", id = "aed8adc553624a14a6f0e487f43f6091", preview_id = "5c97e96d604a4205b645261a87b33379" }
 ]
 
 [durable_objects]

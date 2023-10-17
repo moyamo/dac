@@ -25,6 +25,7 @@ export interface Env {
   COUNTER?: DurableObjectNamespace;
   ADMIN_PASSWORD?: string;
   PROJECTS?: KVNamespace;
+  ACLS?: KVNamespace;
 }
 
 export type Project = {
@@ -39,6 +40,16 @@ export type Project = {
   authorDescription: string;
   isDraft: boolean;
 };
+
+export type Acl = {
+  grants: Record<AclUser, Array<AclPermission>>;
+};
+
+export type AclUser = string;
+
+export type AclPermission = string;
+
+export type AclResource = string; // The key of ACLs
 
 export function getAdmin<R extends Request>(req: R, env: Env): "admin" | null {
   if (!env.ADMIN_PASSWORD) return null;
@@ -71,6 +82,46 @@ function withUser(req: Itty.IRequest, env: Env) {
   if (admin != null) {
     req.user = admin;
   }
+}
+
+export type AclKindId = "projects";
+
+export type AclKind = {
+  allPermissions: Array<AclPermission>;
+};
+
+const AclKinds: Record<AclKindId, AclKind> = {
+  projects: {
+    allPermissions: ["edit"],
+  },
+};
+
+export function aclResourceToAclKind(resource: AclResource): AclKind | null {
+  if (resource.startsWith("/projects/")) {
+    return AclKinds["projects"];
+  }
+  return null;
+}
+
+export async function getAcl(env: Env, resource: AclResource): Promise<Acl> {
+  if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
+  const aclString = await env.ACLS.get(resource);
+  if (aclString == null) return { grants: {} };
+  const acl = JSON.parse(aclString) as Acl;
+  return acl;
+}
+
+export async function getAclPermissions(
+  env: Env,
+  resource: AclResource,
+  user: AclUser
+): Promise<Array<AclPermission>> {
+  if (user == "admin") {
+    return aclResourceToAclKind(resource)?.allPermissions ?? [];
+  }
+  const acl = await getAcl(env, resource);
+  const permissions = acl.grants[user] ?? [];
+  return permissions;
 }
 
 async function getProject(
@@ -200,8 +251,13 @@ export default {
       const { projectId } = req.params;
       const project = await getProject(env, projectId);
       if (project == null) return Itty.error(404);
-      if (project.isDraft && req.user != "admin")
-        return requestBasicAuthentication();
+      if (project.isDraft) {
+        if (typeof req.user != "string") return requestBasicAuthentication();
+        const resource = new URL(req.url).pathname;
+        const permissions = await getAclPermissions(env, resource, req.user);
+        if (!permissions.includes("edit")) return Itty.error(403);
+      }
+
       return { project: project };
     });
 
@@ -261,6 +317,53 @@ export default {
       );
     });
 
+    router.post("/acls/grants", withUser, async (req) => {
+      const jsonBody = await req.json<PostAclsGrant>();
+      const { grant } = jsonBody;
+      if (typeof req.user != "string") return Itty.error(401);
+      const ourPermissions = await getAclPermissions(
+        env,
+        grant.resource,
+        req.user
+      );
+
+      const allPermissions =
+        aclResourceToAclKind(grant.resource)?.allPermissions ?? [];
+
+      for (const requestedPermission of grant.permissions) {
+        // We can only grant permissions that exist!
+        if (!allPermissions.includes(requestedPermission))
+          return Itty.error(400);
+        // We can only grant permissions we have!
+        if (!ourPermissions.includes(requestedPermission))
+          return Itty.error(403);
+      }
+      if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
+
+      const currentPermissions = await getAclPermissions(
+        env,
+        grant.resource,
+        grant.user
+      );
+      let changed = false;
+      for (const requestedPermission of grant.permissions) {
+        if (!currentPermissions.includes(requestedPermission)) {
+          currentPermissions.push(requestedPermission);
+          changed = true;
+        }
+      }
+      console.log("/acl/grant changed", changed, grant);
+      // TODO there is a race here with other requests that should be fixed by
+      // synchronizing writes through durable objects.
+      if (changed) {
+        const acl: Acl = await getAcl(env, grant.resource);
+        acl.grants[grant.user] = currentPermissions;
+        console.log("putting", grant.resource, acl);
+        await env.ACLS.put(grant.resource, JSON.stringify(acl));
+      }
+      return Itty.json({});
+    });
+
     router.all("*", () => Itty.error(404));
 
     let response = router
@@ -272,6 +375,14 @@ export default {
     }
     return response;
   },
+};
+
+type PostAclsGrant = {
+  grant: {
+    user: AclUser;
+    resource: AclResource;
+    permissions: Array<AclPermission>;
+  };
 };
 
 type PutContractBody = {
