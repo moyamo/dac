@@ -35,6 +35,12 @@ time, you need to set the environment variables
 - `REACT_APP_WORKER_URL` the the URL of the deployed worker, and
 - `REACT_APP_PAYPAL_CLIENT_ID` to your Paypal Client ID. It should be the same
   as the one set in the worker.
+- `REACT_APP_GOOGLE_CLIENT_ID` to your Google Client ID ([found
+  here](https://console.cloud.google.com/apis/credentials)). You'll need to
+  create a project; configure the OAuth consent screen; configure the OAuth 2.0
+  Client ID to use the correct domains (include `http://localhost` and
+  `http://localhost:3000` for testing). You probably want to add this to `.env.development.local`
+  file if testing google log-in since this has no sensible default.
 - `REACT_APP_HEADER_PARENTHESIS` (optional) specify text that appears in
   parenthesized in the website header. This is useful for distinguishing testing
   from production. e.g. `REACT_APP_HEADER_PARENTHESIS="test site"` will render
@@ -121,6 +127,21 @@ wrong.
 9. There should be a list of bonuses that need to be payed out.
 10. Log-in to paypal and payout the bonuses manually marking them off as you go.
 11. Refresh the /admin page. THe marked off payments should not be visable.
+
+### Let people use a draft project
+
+1. Log-in as admin at /adminLogin.
+2. Open a URL /projects/test/edit.
+3. Fill-out form. Click submit.
+4. Share the form with a gmail user.
+5. Open a different browser (or clear your cookies).
+6. Navigate to /projects/test/edit. The browser should redirect you to a login
+   page.
+7. Login with google. You should get redirected back to the edit page.
+8. Make an edit. Click submit. It should redirect to /projects/test and the
+   changes should be reflected.
+9. Click on the PayPal button. It should not work.
+10. Click on the edit link. It should take you to /projects/test.
 
 ## Documentation
 

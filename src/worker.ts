@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import * as jose from "jose";
 import * as Itty from "itty-router";
 
 import * as Paypal from "./paypalTypes";
@@ -21,6 +22,7 @@ export interface Env {
   PAYPAL_API_URL?: string;
   PAYPAL_CLIENT_ID?: string;
   PAYPAL_APP_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
   FRONTEND_URL?: string;
   COUNTER?: DurableObjectNamespace;
   ADMIN_PASSWORD?: string;
@@ -65,6 +67,41 @@ export function getAdmin<R extends Request>(req: R, env: Env): "admin" | null {
   return "admin";
 }
 
+export async function getGoogle<R extends Request>(
+  req: R,
+  env: Env
+): Promise<string | null> {
+  if (typeof env.GOOGLE_CLIENT_ID == "undefined") return null;
+  const auth = req.headers.get("Authorization");
+  if (auth == null) return null;
+  const authSplit = auth.split(" ");
+  if (authSplit.length != 2) return null;
+  if (authSplit[0] != "Bearer") return null;
+  const bearerToken = authSplit[1];
+  const googleKeysResponse = await fetch(
+    "https://www.googleapis.com/oauth2/v3/certs"
+  );
+  const googleKeysJson = await googleKeysResponse.json<{
+    keys: Array<jose.JWK>;
+  }>();
+  const getGoogleKeys: jose.JWTVerifyGetKey = async (
+    protectedHeader,
+    _token
+  ) => {
+    for (const k of googleKeysJson.keys) {
+      if (k.kid == protectedHeader.kid) return await jose.importJWK(k);
+    }
+    throw Error("No key found");
+  };
+  const ticket = await jose.jwtVerify(bearerToken, getGoogleKeys, {
+    audience: env.GOOGLE_CLIENT_ID,
+    issuer: "https://accounts.google.com",
+  });
+  const email = ticket.payload["email"];
+  if (typeof email != "string") return null;
+  return email;
+}
+
 function requestBasicAuthentication() {
   return Itty.text("", {
     status: 401,
@@ -77,10 +114,15 @@ export function withAdmin<R extends Request>(req: R, env: Env) {
   if (admin == null) return requestBasicAuthentication();
 }
 
-function withUser(req: Itty.IRequest, env: Env) {
+async function withUser(req: Itty.IRequest, env: Env) {
   const admin = getAdmin(req, env);
   if (admin != null) {
     req.user = admin;
+    return;
+  }
+  const googleUser = await getGoogle(req, env);
+  if (googleUser != null) {
+    req.user = googleUser;
   }
 }
 
@@ -252,7 +294,7 @@ export default {
       const project = await getProject(env, projectId);
       if (project == null) return Itty.error(404);
       if (project.isDraft) {
-        if (typeof req.user != "string") return requestBasicAuthentication();
+        if (typeof req.user != "string") return Itty.error(401);
         const resource = new URL(req.url).pathname;
         const permissions = await getAclPermissions(env, resource, req.user);
         if (!permissions.includes("edit")) return Itty.error(403);
@@ -261,7 +303,11 @@ export default {
       return { project: project };
     });
 
-    router.put("/projects/:projectId", withAdmin, async (req) => {
+    router.put("/projects/:projectId", withUser, async (req) => {
+      if (typeof req.user != "string") return requestBasicAuthentication();
+      const resource = new URL(req.url).pathname;
+      const permissions = await getAclPermissions(env, resource, req.user);
+      if (!permissions.includes("edit")) return Itty.error(403);
       const { projectId } = req.params;
       const jsonBody = await req.json<{ project: Project }>();
       await setProject(env, projectId, jsonBody.project);
@@ -317,6 +363,20 @@ export default {
       );
     });
 
+    router.get("/acls/grants", withUser, async (req) => {
+      if (typeof req.user != "string") return Itty.error(401);
+      const resource = req.query["resource"];
+      if (resource == null || Array.isArray(resource)) return Itty.error(400);
+      const permissions = await getAclPermissions(env, resource, req.user);
+      // To view the list you must have some permission for the object.
+      if (permissions.length == 0) return Itty.error(403);
+      const acl = await getAcl(env, resource);
+
+      return Itty.json({
+        grants: acl.grants,
+      });
+    });
+
     router.post("/acls/grants", withUser, async (req) => {
       const jsonBody = await req.json<PostAclsGrant>();
       const { grant } = jsonBody;
@@ -352,16 +412,16 @@ export default {
           changed = true;
         }
       }
-      console.log("/acl/grant changed", changed, grant);
+      const acl: Acl = await getAcl(env, grant.resource);
       // TODO there is a race here with other requests that should be fixed by
       // synchronizing writes through durable objects.
       if (changed) {
-        const acl: Acl = await getAcl(env, grant.resource);
         acl.grants[grant.user] = currentPermissions;
-        console.log("putting", grant.resource, acl);
         await env.ACLS.put(grant.resource, JSON.stringify(acl));
       }
-      return Itty.json({});
+      return Itty.json({
+        grants: acl.grants,
+      });
     });
 
     router.all("*", () => Itty.error(404));

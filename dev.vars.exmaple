@@ -7,3 +7,5 @@ PAYPAL_APP_SECRET=blahblahblah
 FRONTEND_URL=http://localhost:3000
 # Password for using the admin console
 ADMIN_PASSWORD=
+# Needed for "Log-in with Google"
+GOOGLE_CLIENT_ID=

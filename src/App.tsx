@@ -22,6 +22,7 @@ import type {
   Project,
 } from "./worker";
 import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
+import * as ReactOAuthGoogle from "@react-oauth/google";
 
 export const WORKER_URL =
   process.env.REACT_APP_WORKER_URL || "http://localhost:8787";
@@ -49,6 +50,70 @@ function Markdown({ markdown }: MarkdownProps) {
         __html: DOMPurify.sanitize(marked.parse(markdown)),
       }}
     ></div>
+  );
+}
+
+const CredentialsContext = React.createContext<string | null>(null);
+
+const SetCredentialsContext = React.createContext<(c: string | null) => void>(
+  (_c) => null
+);
+
+async function authFetch(method: string, path: string, init?: RequestInit) {
+  init = init ?? {};
+  const credentials = localStorage.getItem("credentials"); // can't get context all the time
+  let fetchParams: RequestInit = {};
+  if (credentials != null && credentials.startsWith("admin:")) {
+    fetchParams.headers = {
+      Authorization: `Basic ${window.btoa(credentials)}`,
+    };
+  } else if (credentials != null) {
+    fetchParams.headers = { Authorization: `Bearer ${credentials}` };
+  } else {
+    fetchParams.credentials = "include";
+  }
+  fetchParams.headers = { ...fetchParams.headers, ...init.headers };
+  const initWithoutHeaders = { ...init };
+  delete init.headers;
+  fetchParams = { method, ...fetchParams, ...initWithoutHeaders };
+  const response = await fetch(`${WORKER_URL}${path}`, fetchParams);
+  if (response.status == 500) {
+    const jsonBody: Record<string, unknown> = await response.json();
+    if (jsonBody?.code == "ERR_JWT_EXPIRED") {
+      return "logout";
+    }
+  }
+  return response;
+}
+
+type TopLevelProps = {
+  headerParenthesis?: string;
+};
+
+function TopLevel(props: TopLevelProps) {
+  const { headerParenthesis } = props;
+  const outlet = ReactRouterDom.useOutlet();
+  const [credentials, setCredentialsState] = React.useState<string | null>(
+    localStorage.getItem("credentials")
+  );
+
+  function setCredentials(credentials: string | null) {
+    if (credentials == null) localStorage.removeItem("credentials");
+    else localStorage.setItem("credentials", credentials);
+    setCredentialsState(credentials);
+  }
+
+  return (
+    <SetCredentialsContext.Provider value={setCredentials}>
+      <CredentialsContext.Provider value={credentials}>
+        <header>
+          <h1>{`Refund Bonus${
+            headerParenthesis ? ` (${headerParenthesis})` : ""
+          }`}</h1>
+        </header>
+        {outlet == null ? <RedirectToDemo /> : outlet}
+      </CredentialsContext.Provider>
+    </SetCredentialsContext.Provider>
   );
 }
 
@@ -84,26 +149,31 @@ export function routes({
   return [
     {
       path: "/",
-      element: <RedirectToDemo />,
-    },
-    {
-      path: "/projects/:projectId",
-      loader: projectLoader,
-      element: (
-        <App
-          PaypalButtons={PaypalButtons}
-          headerParenthesis={headerParenthesis}
-        />
-      ),
-    },
-    {
-      path: "/projects/:projectId/admin",
-      element: <AdminApp />,
-    },
-    {
-      path: "/projects/:projectId/edit",
-      loader: projectLoader,
-      element: <EditApp />,
+      element: <TopLevel headerParenthesis={headerParenthesis} />,
+      children: [
+        {
+          path: "/login",
+          element: <LoginPage />,
+        },
+        {
+          path: "/adminLogin",
+          element: <AdminLogin />,
+        },
+        {
+          path: "/projects/:projectId",
+          loader: projectLoader,
+          element: <App PaypalButtons={PaypalButtons} />,
+        },
+        {
+          path: "/projects/:projectId/admin",
+          element: <AdminApp />,
+        },
+        {
+          path: "/projects/:projectId/edit",
+          loader: projectLoader,
+          element: <EditApp />,
+        },
+      ],
     },
   ];
 }
@@ -111,16 +181,19 @@ export function routes({
 type ProjectLoader = { project?: Project; error?: string };
 
 async function projectLoader({
-  request: _reqeust,
+  request,
   params,
-}: LoaderFunctionArgs): Promise<ProjectLoader> {
+}: LoaderFunctionArgs): Promise<ProjectLoader | Response> {
   const { projectId } = params;
   if (typeof projectId == "undefined") {
     return { error: "project undefined" };
   }
-  const response = await fetch(`${WORKER_URL}/projects/${projectId}`, {
-    credentials: "include",
-  });
+  const response = await authFetch("GET", `/projects/${projectId}`);
+  if (response == "logout") {
+    return ReactRouterDom.redirect(
+      `/login?redirect=${new URL(request.url).pathname}&logout=true`
+    );
+  }
   if (response.ok) {
     const r = await response.json<{ project: Project }>();
     return {
@@ -135,11 +208,10 @@ async function projectLoader({
 
 export type AppProps = {
   PaypalButtons: React.FunctionComponent<PayPalButtonsComponentProps>;
-  headerParenthesis?: string;
 };
 
 function App(props: AppProps) {
-  const { PaypalButtons, headerParenthesis } = props;
+  const { PaypalButtons } = props;
   const { projectId } = ReactRouterDom.useParams();
   const { project, error: loaderError } =
     ReactRouterDom.useLoaderData() as ProjectLoader;
@@ -163,12 +235,6 @@ function App(props: AppProps) {
 
   return (
     <>
-      <header>
-        <h1>{`Refund Bonus${
-          headerParenthesis ? ` (${headerParenthesis})` : ""
-        }`}</h1>
-      </header>
-
       {typeof project == "undefined" ? (
         <div className="error"> {loaderError} </div>
       ) : (
@@ -197,6 +263,10 @@ function App(props: AppProps) {
                   <p>
                     This is a <strong>draft</strong> project. The PayPal button
                     will not work.
+                    <ReactRouterDom.Link to="edit">
+                      Click to here edit draft
+                    </ReactRouterDom.Link>
+                    .
                   </p>
                 )}
 
@@ -597,6 +667,14 @@ function EditApp() {
   const [error, setError] = React.useState<string | null>(initialError || null);
   const errorRef = React.createRef<HTMLDivElement>();
   const navigate = ReactRouterDom.useNavigate();
+  const location = ReactRouterDom.useLocation();
+  const url = location.pathname ?? "/";
+
+  React.useEffect(() => {
+    if (error == "401 Unauthorized") {
+      navigate(`/login?redirect=${url}`);
+    }
+  }, [error]);
 
   return (
     <ProjectStateContext.Provider value={[project, setProject]}>
@@ -622,16 +700,16 @@ function EditApp() {
               project.isDraft = true;
             }
             void (async () => {
-              const r = await fetch(`${WORKER_URL}/projects/${projectId}`, {
-                method: "PUT",
-                credentials: "include",
+              const r = await authFetch("PUT", `/projects/${projectId}`, {
                 body: JSON.stringify({ project: project }),
               });
-              if (!r.ok) {
+              if (r == "logout") {
+                navigate(`/login?redirect=${url}&logout=true`);
+              } else if (!r.ok) {
                 setError(`${r.status} ${r.statusText}`);
               } else {
                 setError(null);
-                navigate(0); // reload
+                navigate("..", { relative: "path" }); // View Project
               }
             })();
           }}
@@ -647,8 +725,173 @@ function EditApp() {
           <ProjectInput type="textarea" label="Author Description" />
           <input type="submit" value="Submit" />
         </form>
+        <h3> Users who can edit this project </h3>
+        <AclEditor resource={`/projects/${projectId}`} permissions={["edit"]} />
       </ProjectErrorContext.Provider>
     </ProjectStateContext.Provider>
+  );
+}
+
+type AclEditorProps = {
+  resource: string;
+  permissions: Array<string>;
+};
+
+function AclEditor(props: AclEditorProps) {
+  const { resource, permissions } = props;
+  const [user, setUser] = React.useState("");
+  type Grants = { [user: string]: Array<string> };
+  const [grants, setGrants] = React.useState<Grants>({});
+
+  async function grantsFromResponse(r: Response | "logout"): Promise<Grants> {
+    if (r == "logout") {
+      return { "permission denied": ["permission denied"] };
+    } else if (r.ok) {
+      const response = await r.json<{ grants: Grants }>();
+      return response.grants;
+    } else {
+      return { [`${r.status}`]: [`${r.statusText}`] };
+    }
+  }
+
+  React.useEffect(() => {
+    void (async () => {
+      const r = await authFetch("GET", `/acls/grants?resource=${resource}`);
+      setGrants(await grantsFromResponse(r));
+    })();
+  }, [resource]);
+
+  return (
+    <>
+      <ul>
+        {Object.entries(grants).map(([user, permissions]) =>
+          permissions.includes("edit") ? <li key={user}>{user}</li> : null
+        )}
+      </ul>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void (async () => {
+            const r = await authFetch("POST", `/acls/grants`, {
+              body: JSON.stringify({
+                grant: {
+                  resource,
+                  permissions,
+                  user,
+                },
+              }),
+            });
+            setGrants(await grantsFromResponse(r));
+          })();
+        }}
+      >
+        <label> Email </label>
+        <input
+          type="text"
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
+        />
+        <input type="submit" value="Share Edit Access" />
+      </form>
+    </>
+  );
+}
+
+function LoginPage() {
+  const credentials = React.useContext(CredentialsContext);
+  const setCredentials = React.useContext(SetCredentialsContext);
+  const [searchParams, setSearchParams] = ReactRouterDom.useSearchParams();
+  const redirectQuery = searchParams.get("redirect");
+  const logoutQuery = searchParams.get("logout");
+  const navigate = ReactRouterDom.useNavigate();
+
+  function logout() {
+    ReactOAuthGoogle.googleLogout();
+    setCredentials(null);
+  }
+
+  React.useEffect(() => {
+    if (credentials != null && redirectQuery != null && logoutQuery == null) {
+      navigate(redirectQuery);
+    } else if (credentials != null && logoutQuery != null) {
+      setSearchParams((searchParams) => {
+        searchParams.delete("logout");
+        return searchParams;
+      });
+      logout();
+    }
+  }, [credentials, redirectQuery, logoutQuery]);
+
+  return (
+    <>
+      <form>
+        <h2> Login </h2>
+        {credentials != null ? (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              logout();
+            }}
+          >
+            Logout
+          </button>
+        ) : (
+          <ReactOAuthGoogle.GoogleLogin
+            onSuccess={(credentialResponse) => {
+              setCredentials(credentialResponse.credential ?? null);
+            }}
+            onError={() => {
+              console.log("Login Failed");
+              setCredentials(null);
+            }}
+          />
+        )}
+        To register contact the site administrator.
+      </form>
+    </>
+  );
+}
+
+function AdminLogin() {
+  const credentials = React.useContext(CredentialsContext);
+  const setCredentials = React.useContext(SetCredentialsContext);
+  const [password, setPassword] = React.useState<string>("");
+
+  return (
+    <>
+      <form>
+        <h2> AdminLogin </h2>
+
+        {credentials != null ? (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              setCredentials(null);
+            }}
+          >
+            Logout
+          </button>
+        ) : (
+          <>
+            <label> Password </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                setCredentials(`admin:${password}`);
+              }}
+            >
+              Log-in
+            </button>
+          </>
+        )}
+      </form>
+    </>
   );
 }
 

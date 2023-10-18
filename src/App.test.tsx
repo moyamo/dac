@@ -108,6 +108,13 @@ const server = setupServer(
   rest.put(WORKER_URL + "/projects/test", async (req, res, ctx) => {
     project = (await req.json<{ project: Project }>()).project;
     return res(ctx.status(200));
+  }),
+  rest.get(WORKER_URL + "/acls/grants", (_req, res, ctx) => {
+    return res(
+      ctx.json({
+        grants: {},
+      })
+    );
   })
 );
 beforeAll(() => server.listen());
@@ -312,7 +319,7 @@ test("Draft Project does not accept Payment", async () => {
   render(<MockApp />);
   const amountInput = await screen.findByLabelText("Amount ($)");
   fireEvent.change(amountInput, { target: { value: 20 } });
-  expect(await screen.findByText(/draft/i)).toBeInTheDocument();
+  expect((await screen.findAllByText(/draft/i))[0]).toBeInTheDocument();
   const paypalButton = await screen.findByText("PayPal");
   fireEvent.click(paypalButton);
   await waitFor(() => expect(paypalTransactionValid).toBe(false));

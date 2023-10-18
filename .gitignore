@@ -29,3 +29,6 @@ yarn-error.log*
 
 # Environment Variables for Worker Development
 .dev.vars
+
+# Environment Variables for React App
+.env.development.local

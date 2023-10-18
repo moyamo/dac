@@ -5,12 +5,15 @@ import * as MyApp from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
 export const PAYPAL_CLIENT_ID =
   process.env.REACT_APP_PAYPAL_CLIENT_ID || "test";
 
 export const HEADER_PARENTHESIS =
   process.env.REACT_APP_HEADER_PARENTHESIS || "";
+
+export const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -34,7 +37,9 @@ root.render(
      * [1]: https://www.npmjs.com/package/@paypal/react-paypal-js
      */}
     <PayPalScriptProvider options={{ "client-id": PAYPAL_CLIENT_ID }}>
-      <RouterProvider router={router} />
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <RouterProvider router={router} />
+      </GoogleOAuthProvider>
     </PayPalScriptProvider>
   </React.StrictMode>
 );
