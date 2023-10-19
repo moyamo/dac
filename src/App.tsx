@@ -671,7 +671,9 @@ function EditApp() {
   const url = location.pathname ?? "/";
 
   React.useEffect(() => {
-    if (error == "401 Unauthorized") {
+    // Seems like this is "401 Unauthorized" in my local environment but just
+    // "401 " in production. I don't know why there is a difference.
+    if (error == "401 Unauthorized" || error == "401 ") {
       navigate(`/login?redirect=${url}`);
     }
   }, [error]);
