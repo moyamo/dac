@@ -3,6 +3,7 @@
   "reports-dir": "./",
   "all": true,
   "include": ["src/**.{ts,tsx,js,jsx}", "miniflarejestbuild/**.js"],
+  "exclude-after-remap": true,
   "exclude": [
     "coverage/**",
     "packages/*/test{,s}/**",
