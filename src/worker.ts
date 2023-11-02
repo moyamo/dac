@@ -268,7 +268,7 @@ export default {
     });
 
     router.put("/projects/:projectId", withUser, async (req) => {
-      if (typeof req.user != "string") return requestBasicAuthentication();
+      if (typeof req.user != "string") return Itty.error(401);
       const resource = new URL(req.url).pathname;
       const permissions = await getAclPermissions(env, resource, req.user);
       if (!permissions.includes("edit")) return Itty.error(403);

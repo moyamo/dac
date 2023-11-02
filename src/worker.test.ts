@@ -876,7 +876,9 @@ describe("Paypal Authenticated API", () => {
             ctx
           );
           expect(response.status).toBe(401);
-          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+          // This is also google authenticated, so asking for basic
+          // authentication would be confusing.
+          expect(response.headers.get("WWW-Authenticate")).toBeNull();
         });
       });
       describe("Authenticated", () => {
