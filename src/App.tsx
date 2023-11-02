@@ -12,17 +12,12 @@ import type { LoaderFunctionArgs } from "react-router";
 import Countdown from "react-countdown";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import "./App.css";
-import type {
-  Bonus,
-  BonusesResponse,
-  CounterResponse,
-  CreateOrderResponse,
-  Order,
-  Project,
-} from "./worker";
-import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
 import * as ReactOAuthGoogle from "@react-oauth/google";
+
+import "./App.css";
+import * as Schema from "./schema";
+import * as Paypal from "./paypalTypes";
+import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
 
 export const WORKER_URL =
   process.env.REACT_APP_WORKER_URL || "http://localhost:8787";
@@ -178,7 +173,7 @@ export function routes({
   ];
 }
 
-type ProjectLoader = { project?: Project; error?: string };
+type ProjectLoader = { project?: Schema.Project; error?: string };
 
 async function projectLoader({
   request,
@@ -195,7 +190,7 @@ async function projectLoader({
     );
   }
   if (response.ok) {
-    const r = await response.json<{ project: Project }>();
+    const r = await response.json<{ project: Schema.Project }>();
     return {
       project: r.project,
     };
@@ -222,12 +217,14 @@ function App(props: AppProps) {
   );
   const [progress, setProgress] = React.useState(-1);
 
-  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [orders, setOrders] = React.useState<Schema.ProjectOrder[]>([]);
 
   React.useEffect(() => {
     void (async () => {
       const count = await fetch(`${WORKER_URL}/projects/${projectId}/counter`);
-      const response = await count.json<CounterResponse>();
+      const response = Schema.GetProjectCounterResponse.parse(
+        await count.json()
+      );
       setProgress(response.amount);
       setOrders(response.orders);
     })();
@@ -301,8 +298,9 @@ function App(props: AppProps) {
                         body: JSON.stringify({ amount: amountRef.current }),
                       }
                     );
-                    const responseJson: CreateOrderResponse =
-                      await response.json();
+                    const responseJson = Paypal.CreateOrderResponse.parse(
+                      await response.json()
+                    );
                     return responseJson.id;
                   }}
                   onApprove={async (
@@ -428,7 +426,7 @@ export function FundingTimer(props: FundingTimerProps) {
 }
 
 export type FunderTableProps = {
-  orders: Order[];
+  orders: Schema.ProjectOrder[];
 };
 
 export function FunderTable(props: FunderTableProps) {
@@ -492,7 +490,9 @@ type PendingPayoutsTableProps = {
 
 function PendingPayoutsTable(props: PendingPayoutsTableProps) {
   const { projectId } = props;
-  const [bonuses, setBonuses] = React.useState<Record<string, Bonus>>({});
+  const [bonuses, setBonuses] = React.useState<
+    Record<string, Schema.ProjectBonus>
+  >({});
   const [updates, setUpdates] = React.useState(0);
   React.useEffect(() => {
     void (async () => {
@@ -502,7 +502,9 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
           credentials: "include",
         }
       );
-      const bonuses = await response.json<BonusesResponse>();
+      const bonuses = Schema.GetProjectBonusesResponse.parse(
+        await response.json()
+      );
       setBonuses(bonuses.bonuses || {});
     })();
   }, [updates]);
@@ -551,10 +553,9 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
 
 type UseState<T> = [T, React.Dispatch<React.SetStateAction<T>>];
 
-const ProjectStateContext = React.createContext<UseState<Partial<Project>>>([
-  {},
-  (_mP) => null,
-]);
+const ProjectStateContext = React.createContext<
+  UseState<Partial<Schema.Project>>
+>([{}, (_mP) => null]);
 
 const ProjectErrorContext = React.createContext<
   UseState<Record<string, string>>
@@ -572,10 +573,12 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
     .map((w) => w.toLowerCase())
     .map(onFirstChar((c) => c.toUpperCase()))
     .join("");
-  const name = onFirstChar((c) => c.toLowerCase())(Name) as keyof Project;
+  const name = onFirstChar((c) => c.toLowerCase())(
+    Name
+  ) as keyof Schema.Project;
   const id = "ConfigForm" + Name;
 
-  function projectToInput(project: Partial<Project>): string | number {
+  function projectToInput(project: Partial<Schema.Project>): string | number {
     let value = project[name] || "";
     if (type == "datetime-local" && value != "" && typeof value == "string") {
       // See https://stackoverflow.com/questions/30166338/setting-value-of-datetime-local-from-date
@@ -658,7 +661,7 @@ function EditApp() {
   if (typeof projectId == "undefined") throw Error("projectId undefined");
   const { project: initialProject, error: initialError } =
     ReactRouterDom.useLoaderData() as ProjectLoader;
-  const [project, setProject] = React.useState<Partial<Project>>(
+  const [project, setProject] = React.useState<Partial<Schema.Project>>(
     initialProject || {}
   );
   const [projectError, setProjectError] = React.useState<

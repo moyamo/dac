@@ -18,12 +18,10 @@ import worker, {
   createOrder,
   capturePayment,
   Counter,
-  CounterResponse,
   refundCapture,
   withAdmin,
-  Bonus,
-  Project,
 } from "./worker";
+import * as Schema from "./schema";
 
 let env: Env;
 // reset before every test.
@@ -336,7 +334,7 @@ describe("ACLs", () => {
 });
 
 describe("Paypal Authenticated API", () => {
-  async function setProject(project: Project) {
+  async function setProject(project: Schema.Project) {
     if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
     return await env.PROJECTS.put("test", JSON.stringify(project));
   }
@@ -449,7 +447,9 @@ describe("Paypal Authenticated API", () => {
       it("returns 0 when uninitialized", async () => {
         const counter = Counter.fromName(env, "test");
         const response = await counter.fetch("http://localhost/counter");
-        const responseJson = await response.json<CounterResponse>();
+        const responseJson = Schema.GetProjectCounterResponse.parse(
+          await response.json()
+        );
         expect(responseJson.amount).toBe(0);
         expect(responseJson.orders).toHaveLength(0);
       });
@@ -470,7 +470,9 @@ describe("Paypal Authenticated API", () => {
         });
 
         const response2 = await counter.fetch("http://localhost/counter");
-        const response2Json = await response2.json<CounterResponse>();
+        const response2Json = Schema.GetProjectCounterResponse.parse(
+          await response2.json()
+        );
         expect(response2Json.amount).toBe(11);
         expect(response2Json.orders).toHaveLength(1);
         expect(response2Json.orders[0].name).toBe("John D.");
@@ -503,7 +505,9 @@ describe("Paypal Authenticated API", () => {
         });
 
         const response3 = await counter.fetch("http://localhost/counter");
-        const response3Json = await response3.json<CounterResponse>();
+        const response3Json = Schema.GetProjectCounterResponse.parse(
+          await response3.json()
+        );
         expect(response3Json.amount).toBe(43);
         expect(response3Json.orders).toHaveLength(2);
         expect(response3Json.orders[0].name).toBe("John D.");
@@ -542,7 +546,9 @@ describe("Paypal Authenticated API", () => {
         });
 
         const response3 = await counter.fetch("http://localhost/counter");
-        const response3Json = await response3.json<CounterResponse>();
+        const response3Json = Schema.GetProjectCounterResponse.parse(
+          await response3.json()
+        );
         expect(response3Json.amount).toBe(11);
       });
     });
@@ -772,7 +778,9 @@ describe("Paypal Authenticated API", () => {
           env,
           ctx
         );
-        const responseJson = await response.json<CounterResponse>();
+        const responseJson = Schema.GetProjectCounterResponse.parse(
+          await response.json()
+        );
         expect(responseJson.amount).toBe(0);
         expect(responseJson.orders).toHaveLength(0);
       });
@@ -814,7 +822,9 @@ describe("Paypal Authenticated API", () => {
           env,
           ctx
         );
-        const response3Json = await response3.json<CounterResponse>();
+        const response3Json = Schema.GetProjectCounterResponse.parse(
+          await response3.json()
+        );
         expect(response3Json.amount).toBe(15);
         expect(response3Json.orders).toHaveLength(1);
         expect(response3Json.orders[0].name).toBe("John D.");
@@ -1015,7 +1025,7 @@ describe("Paypal Authenticated API", () => {
           );
           expect(response4.status).toBe(200);
           const response4Json = await response4.json<{
-            bonuses: Record<string, Bonus>;
+            bonuses: Record<string, Schema.ProjectBonus>;
           }>();
           expect(Object.keys(response4Json.bonuses)).toHaveLength(1);
           expect(response4Json.bonuses[orderId].amount).toBe(3);
@@ -1075,7 +1085,9 @@ describe("Paypal Authenticated API", () => {
               ctx
             );
             expect(response2.status).toBe(200);
-            const jsonBody = await response2.json<{ project: Project }>();
+            const jsonBody = await response2.json<{
+              project: Schema.Project;
+            }>();
             expect(jsonBody.project.fundingGoal).toBe("200");
             expect(jsonBody.project.fundingDeadline).toBe(
               "2023-01-01T12:01:01.000Z"
@@ -1117,7 +1129,7 @@ describe("Paypal Authenticated API", () => {
               ctx
             );
             expect(response.status).toBe(200);
-            const jsonBody = await response.json<{ project: Project }>();
+            const jsonBody = await response.json<{ project: Schema.Project }>();
             expect(jsonBody.project.fundingGoal).toBe("200");
             expect(jsonBody.project.fundingDeadline).toBe(
               "2023-01-01T12:01:01.000Z"

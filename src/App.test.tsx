@@ -17,12 +17,12 @@ import {
 import { rest } from "msw";
 import { setupServer } from "msw/node";
 import { PayPalButtonsComponentProps } from "@paypal/react-paypal-js";
-import type { Bonus, Project } from "./worker";
+import * as Schema from "./schema";
 
 let counter = 0;
 let pendingAmount: number | null = null;
-let bonuses: Record<string, Bonus> = {};
-let project: Project;
+let bonuses: Record<string, Schema.ProjectBonus> = {};
+let project: Schema.Project;
 beforeEach(() => {
   counter = 0;
   pendingAmount = null;
@@ -58,7 +58,9 @@ const server = setupServer(
   rest.post(WORKER_URL + "/projects/test/contract", async (req, res, ctx) => {
     const jsonBody = await req.json<{ amount: number }>();
     pendingAmount = jsonBody.amount;
-    return res(ctx.json({ id: "random_order_id" }));
+    return res(
+      ctx.json({ id: "random_order_id", links: [], status: "CREATED" })
+    );
   }),
   rest.patch(
     WORKER_URL + "/projects/test/contract/:orderId",
@@ -106,7 +108,7 @@ const server = setupServer(
     }
   ),
   rest.put(WORKER_URL + "/projects/test", async (req, res, ctx) => {
-    project = (await req.json<{ project: Project }>()).project;
+    project = (await req.json<{ project: Schema.Project }>()).project;
     return res(ctx.status(200));
   }),
   rest.get(WORKER_URL + "/acls/grants", (_req, res, ctx) => {

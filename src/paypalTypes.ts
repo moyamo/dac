@@ -4,6 +4,8 @@
 
 */
 
+import { z } from "zod";
+
 export type PayoutRequest = {
   sender_batch_header: {
     sender_batch_id: string;
@@ -22,71 +24,85 @@ export type PayoutRequest = {
   }>;
 };
 
-export type Link = {
-  href: string;
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  rel: string;
-};
+const Link = z.object({
+  href: z.string().url(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+  rel: z.string(),
+});
 
-export type CreateOrderResponse = {
-  id: string;
-  status: string;
-  links: Link[];
-};
+export type Link = z.infer<typeof Link>;
 
-export type amountWithCurrency = {
-  currency_code: "USD";
-  value: string;
-};
+export const CreateOrderResponse = z.object({
+  id: z.string(),
+  status: z.string(),
+  links: z.array(Link),
+});
+
+export type CreateOrderResponse = z.infer<typeof CreateOrderResponse>;
+
+const AmountWithCurrency = z.object({
+  currency_code: z.enum(["USD"]),
+  value: z.string(),
+});
+
+export type AmountWithCurrency = z.infer<typeof AmountWithCurrency>;
 
 // The response is actually much much bigger than this,
 // but we don't care about the other fields for now.
 // We can add them later.
-export type CapturePaymentResponse = {
-  id: string;
-  links: Link[];
-  payer: unknown;
-  payment_source: {
-    paypal: {
-      account_id: string;
-      account_status: string;
-      address: unknown;
-      email_address: string;
-      name: {
-        given_name: string;
-        surname: string;
-      };
-    };
-  };
-  purchase_units: Array<{
-    payments: {
-      captures: Array<{
-        amount: amountWithCurrency;
-        create_time: string;
-        final_capture: boolean;
-        id: string;
-        links: Link[];
-        seller_protection: {
-          dispute_categories: [string];
-          status: string;
-        };
-        seller_receivable_breakdown: {
-          gross_amount: amountWithCurrency;
-          net_amount: amountWithCurrency;
-          paypal_fee: amountWithCurrency;
-          status: string;
-          update_time: string;
-        };
-      }>;
-    };
-    reference_id: string;
-    shipping: unknown;
-  }>;
-  status: string;
-};
+export const CapturePaymentResponse = z.object({
+  id: z.string(),
+  links: z.array(Link),
+  payer: z.unknown(),
+  payment_source: z.object({
+    paypal: z.object({
+      account_id: z.string(),
+      account_status: z.string(),
+      address: z.unknown(),
+      email_address: z.string(),
+      name: z.object({
+        given_name: z.string(),
+        surname: z.string(),
+      }),
+    }),
+  }),
+  purchase_units: z.array(
+    z.object({
+      payments: z.object({
+        captures: z.array(
+          z.object({
+            id: z.string(),
+            create_time: z.string(),
+            update_time: z.string(),
+            status: z.string(),
+            final_capture: z.boolean(),
+            amount: AmountWithCurrency,
+            links: z.array(Link),
+            seller_protection: z.object({
+              dispute_categories: z.array(z.string()),
+              status: z.string(),
+            }),
+            seller_receivable_breakdown: z.object({
+              gross_amount: AmountWithCurrency,
+              net_amount: AmountWithCurrency,
+              paypal_fee: AmountWithCurrency,
+            }),
+          })
+        ),
+      }),
+      reference_id: z.string(),
+      shipping: z.unknown(),
+    })
+  ),
+  status: z.string(),
+});
 
-export type RefundCaptureResponse = {
-  id: string;
-  status: string;
-  links: Link[];
-};
+export type CapturePaymentResponse = z.infer<typeof CapturePaymentResponse>;
+
+export const RefundCaptureResponse = z.object({
+  id: z.string(),
+  status: z.string(),
+  links: z.array(Link),
+});
+
+export type RefundCaptureResponse = z.infer<typeof RefundCaptureResponse>;

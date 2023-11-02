@@ -208,8 +208,14 @@ export default function () {
       return {
         statusCode: 201,
         data: JSON.stringify({
+          id: "?",
+          links: [],
+          payer: "?",
           payment_source: {
             paypal: {
+              account_id: "?",
+              account_status: "?",
+              address: {},
               email_address: closure.email,
               name: {
                 given_name: closure.givenName,
@@ -227,11 +233,37 @@ export default function () {
                       currency_code: "USD",
                       value: closure.amountUsd,
                     },
+                    create_time: "?",
+                    final_capture: true,
+                    links: [],
+                    seller_protection: {
+                      dispute_categories: [],
+                      status: "",
+                    },
+                    status: "?",
+                    update_time: "?",
+                    seller_receivable_breakdown: {
+                      gross_amount: {
+                        currency_code: "USD",
+                        value: closure.amountUsd,
+                      },
+                      net_amount: {
+                        currency_code: "USD",
+                        value: (Number(closure.amountUsd) * 0.99).toFixed(2),
+                      },
+                      paypal_fee: {
+                        currency_code: "USD",
+                        value: (Number(closure.amountUsd) * 0.01).toFixed(2),
+                      },
+                    },
                   },
                 ],
               },
+              reference_id: "?",
+              shipping: {},
             },
           ],
+          status: "?",
         }),
       };
     });

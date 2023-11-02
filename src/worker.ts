@@ -5,53 +5,21 @@ import * as Itty from "itty-router";
 
 import * as Paypal from "./paypalTypes";
 import { getInvalidAmountError, hasFundingDeadlinePassed } from "./common";
-
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `wrangler dev src/index.ts` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `wrangler publish src/index.ts --name my-worker` to publish your worker
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import * as Schema from "./schema";
 
 // There doesn't seem to be any compile time check that these env vars will
-// correspond at runtime to what is declare here, so putting `?` is necessary.
-export interface Env {
-  PAYPAL_API_URL?: string;
-  PAYPAL_CLIENT_ID?: string;
-  PAYPAL_APP_SECRET?: string;
-  GOOGLE_CLIENT_ID?: string;
-  FRONTEND_URL?: string;
-  COUNTER?: DurableObjectNamespace;
-  ADMIN_PASSWORD?: string;
-  PROJECTS?: KVNamespace;
-  ACLS?: KVNamespace;
-}
-
-export type Project = {
-  fundingDeadline: string;
-  fundingGoal: string;
-  refundBonusPercent: number;
-  defaultPaymentAmount: number;
-  formHeading: string;
-  description: string;
-  authorName: string;
-  authorImageUrl: string;
-  authorDescription: string;
-  isDraft: boolean;
-};
-
-export type Acl = {
-  grants: Record<AclUser, Array<AclPermission>>;
-};
-
-export type AclUser = string;
-
-export type AclPermission = string;
-
-export type AclResource = string; // The key of ACLs
+// correspond at runtime to what is declared here, so making Partial.
+export type Env = Partial<{
+  PAYPAL_API_URL: string;
+  PAYPAL_CLIENT_ID: string;
+  PAYPAL_APP_SECRET: string;
+  GOOGLE_CLIENT_ID: string;
+  FRONTEND_URL: string;
+  COUNTER: DurableObjectNamespace;
+  ADMIN_PASSWORD: string;
+  PROJECTS: KVNamespace;
+  ACLS: KVNamespace;
+}>;
 
 export function getAdmin<R extends Request>(req: R, env: Env): "admin" | null {
   if (!env.ADMIN_PASSWORD) return null;
@@ -129,7 +97,7 @@ async function withUser(req: Itty.IRequest, env: Env) {
 export type AclKindId = "projects";
 
 export type AclKind = {
-  allPermissions: Array<AclPermission>;
+  allPermissions: Array<Schema.AclPermission>;
 };
 
 const AclKinds: Record<AclKindId, AclKind> = {
@@ -138,26 +106,31 @@ const AclKinds: Record<AclKindId, AclKind> = {
   },
 };
 
-export function aclResourceToAclKind(resource: AclResource): AclKind | null {
+export function aclResourceToAclKind(
+  resource: Schema.AclResource
+): AclKind | null {
   if (resource.startsWith("/projects/")) {
     return AclKinds["projects"];
   }
   return null;
 }
 
-export async function getAcl(env: Env, resource: AclResource): Promise<Acl> {
+export async function getAcl(
+  env: Env,
+  resource: Schema.AclResource
+): Promise<Schema.Acl> {
   if (typeof env.ACLS == "undefined") throw Error("ACLS undefined");
   const aclString = await env.ACLS.get(resource);
   if (aclString == null) return { grants: {} };
-  const acl = JSON.parse(aclString) as Acl;
+  const acl = Schema.Acl.parse(JSON.parse(aclString));
   return acl;
 }
 
 export async function getAclPermissions(
   env: Env,
-  resource: AclResource,
-  user: AclUser
-): Promise<Array<AclPermission>> {
+  resource: Schema.AclResource,
+  user: Schema.AclUser
+): Promise<Array<Schema.AclPermission>> {
   if (user == "admin") {
     return aclResourceToAclKind(resource)?.allPermissions ?? [];
   }
@@ -169,30 +142,21 @@ export async function getAclPermissions(
 async function getProject(
   env: Env,
   projectId: string
-): Promise<Project | null> {
+): Promise<Schema.Project | null> {
   if (typeof env.PROJECTS == "undefined") {
     throw Error("KV PROJECTS not bound");
   }
   const projectString = await env.PROJECTS.get(projectId);
   if (projectString == null) return null;
-  const project = JSON.parse(projectString) as Record<string, unknown>;
-
-  // migrations
-  if (typeof project.refundBonusPercent == "undefined") {
-    project.refundBonusPercent = 20;
-  }
-  if (typeof project.defaultPaymentAmount == "undefined") {
-    project.defaultPaymentAmount = 89;
-  }
-  if (typeof project.isDraft == "undefined") {
-    // If the project was created before the draft feature was added then it
-    // must be published.
-    project.isDraft = false;
-  }
-  return project as Project;
+  const project = Schema.Project.parse(JSON.parse(projectString));
+  return project;
 }
 
-async function setProject(env: Env, projectId: string, project: Project) {
+async function setProject(
+  env: Env,
+  projectId: string,
+  project: Schema.Project
+) {
   if (typeof env.PROJECTS == "undefined") {
     throw Error("KV PROJECTS not bound");
   }
@@ -309,7 +273,7 @@ export default {
       const permissions = await getAclPermissions(env, resource, req.user);
       if (!permissions.includes("edit")) return Itty.error(403);
       const { projectId } = req.params;
-      const jsonBody = await req.json<{ project: Project }>();
+      const jsonBody = await req.json<{ project: Schema.Project }>();
       await setProject(env, projectId, jsonBody.project);
       return {};
     });
@@ -378,7 +342,7 @@ export default {
     });
 
     router.post("/acls/grants", withUser, async (req) => {
-      const jsonBody = await req.json<PostAclsGrant>();
+      const jsonBody = Schema.PostAclsGrantBody.parse(await req.json());
       const { grant } = jsonBody;
       if (typeof req.user != "string") return Itty.error(401);
       const ourPermissions = await getAclPermissions(
@@ -412,7 +376,7 @@ export default {
           changed = true;
         }
       }
-      const acl: Acl = await getAcl(env, grant.resource);
+      const acl = await getAcl(env, grant.resource);
       // TODO there is a race here with other requests that should be fixed by
       // synchronizing writes through durable objects.
       if (changed) {
@@ -437,14 +401,6 @@ export default {
   },
 };
 
-type PostAclsGrant = {
-  grant: {
-    user: AclUser;
-    resource: AclResource;
-    permissions: Array<AclPermission>;
-  };
-};
-
 type PutContractBody = {
   returnAddress: string;
   captureId: string;
@@ -452,26 +408,6 @@ type PutContractBody = {
   name: string;
   refundBonusPercent: number;
   time: string;
-};
-
-export type Order = {
-  time: string;
-  name: string;
-  amount: number;
-};
-
-export type CounterResponse = {
-  amount: number;
-  orders: Order[];
-};
-
-export type BonusesResponse = {
-  bonuses: Record<string, Bonus>;
-};
-
-export type Bonus = {
-  email: string;
-  amount: number;
 };
 
 // Durable Object
@@ -628,7 +564,8 @@ export class Counter implements DurableObject {
       if (Object.keys(bonuses).length == 0) {
         return Itty.error(404);
       }
-      return { bonuses };
+      const response = { bonuses };
+      return response;
     });
 
     router.delete("/bonuses/:orderId", async (req) => {
@@ -656,15 +593,11 @@ export class Counter implements DurableObject {
 // PayPal API helpers
 /// ///////////////////
 
-export type CreateOrderResponse = {
-  id: string;
-};
-
 // use the orders api to create an order
 export async function createOrder(
   amountUsd: string,
   env: Env
-): Promise<CreateOrderResponse> {
+): Promise<Paypal.CreateOrderResponse> {
   if (typeof env.PAYPAL_API_URL == "undefined")
     throw new TypeError("PAYPAL_API_URL is undefined");
   const accessToken = await generateAccessToken(env);
@@ -687,7 +620,7 @@ export async function createOrder(
       ],
     }),
   });
-  const data = await response.json<CreateOrderResponse>();
+  const data = Paypal.CreateOrderResponse.parse(await response.json());
   return data;
 }
 
@@ -707,7 +640,7 @@ export async function capturePayment(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const data = await response.json<Paypal.CapturePaymentResponse>();
+  const data = Paypal.CapturePaymentResponse.parse(await response.json());
   return data;
 }
 
@@ -779,7 +712,7 @@ export async function refundCapture(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const data = await response.json<Paypal.RefundCaptureResponse>();
+  const data = Paypal.RefundCaptureResponse.parse(await response.json());
   return data;
 }
 
