@@ -13,6 +13,7 @@ import {
   formatTime,
   FundingTimer,
   routes,
+  PublishProject,
 } from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
@@ -530,5 +531,23 @@ describe("EditApp Validation", () => {
     it("author description", async () => {
       await testPreventsEmpty("Author Description");
     });
+  });
+});
+
+test("PublishProject is disabled until project loaded", async () => {
+  project.isDraft = true;
+  render(<PublishProject projectId={"test"} />);
+  expect(screen.getByRole("button")).toHaveAttribute("disabled");
+  await waitFor(() => {
+    expect(screen.getByRole("button")).not.toHaveAttribute("disabled");
+  });
+});
+
+test("PublishProject is disabled if project is already published", async () => {
+  project.isDraft = false;
+  render(<PublishProject projectId={"test"} />);
+  expect(screen.getByRole("button")).toHaveAttribute("disabled");
+  await waitFor(() => {
+    expect(screen.getByRole("button")).toHaveAttribute("disabled");
   });
 });

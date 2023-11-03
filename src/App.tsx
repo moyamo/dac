@@ -73,8 +73,8 @@ async function authFetch(method: string, path: string, init?: RequestInit) {
   fetchParams = { method, ...fetchParams, ...initWithoutHeaders };
   const response = await fetch(`${WORKER_URL}${path}`, fetchParams);
   if (response.status == 500) {
-    const jsonBody: Record<string, unknown> = await response.json();
-    if (jsonBody?.code == "ERR_JWT_EXPIRED") {
+    const responseJson: Record<string, unknown> = await response.json();
+    if (responseJson?.code == "ERR_JWT_EXPIRED") {
       return "logout";
     }
   }
@@ -190,7 +190,7 @@ async function projectLoader({
     );
   }
   if (response.ok) {
-    const r = await response.json<{ project: Schema.Project }>();
+    const r = Schema.GetProjectResponse.parse(await response.json());
     return {
       project: r.project,
     };
@@ -472,6 +472,23 @@ export function formatTime(isoTimeString: string): string {
   // return time.toISOString().replace("T", " ").slice(0, "0000-00-00 00:00".length);
 }
 
+async function adminFetch(method: string, path: string, init?: RequestInit) {
+  init = init ?? {};
+  const credentials = localStorage.getItem("credentials") ?? ""; // can't get context all the time
+  if (process.env.NODE_ENV != "test" && !credentials.startsWith("admin:")) {
+    alert("Unauthorized");
+    throw Error("Unauthorized");
+  }
+  init.headers = {
+    Authorization: `Basic ${window.btoa(credentials)}`,
+    ...init.headers,
+  };
+  return await fetch(`${WORKER_URL}${path}`, {
+    method,
+    ...init,
+  });
+}
+
 export function AdminApp() {
   const { projectId } = ReactRouterDom.useParams();
   if (typeof projectId === "undefined") throw Error("Project undefined");
@@ -480,6 +497,8 @@ export function AdminApp() {
       <h1>Admin App</h1>
       <h2>Pending Payouts</h2>
       <PendingPayoutsTable projectId={projectId} />
+      <h2>Publish</h2>
+      <PublishProject projectId={projectId} />
     </>
   );
 }
@@ -496,11 +515,9 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
   const [updates, setUpdates] = React.useState(0);
   React.useEffect(() => {
     void (async () => {
-      const response = await fetch(
-        `${WORKER_URL}/projects/${projectId}/bonuses`,
-        {
-          credentials: "include",
-        }
+      const response = await adminFetch(
+        "GET",
+        `/projects/${projectId}/bonuses`
       );
       const bonuses = Schema.GetProjectBonusesResponse.parse(
         await response.json()
@@ -527,12 +544,9 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
               <button
                 onClick={() =>
                   void (async () => {
-                    const r = await fetch(
-                      `${WORKER_URL}/projects/${projectId}/bonuses/${orderId}`,
-                      {
-                        method: "DELETE",
-                        credentials: "include",
-                      }
+                    const r = await adminFetch(
+                      "DELETE",
+                      `/projects/${projectId}/bonuses/${orderId}`
                     );
                     if (!r.ok) {
                       alert(`${r.status} ${r.statusText}`);
@@ -548,6 +562,51 @@ function PendingPayoutsTable(props: PendingPayoutsTableProps) {
         ))}
       </tbody>
     </table>
+  );
+}
+type PublishProjectProps = {
+  projectId: string;
+};
+
+export function PublishProject(props: PublishProjectProps) {
+  const { projectId } = props;
+  const [project, setProject] = React.useState<Schema.Project | null>(null);
+
+  React.useEffect(() => {
+    void (async () => {
+      const response = await adminFetch("GET", `/projects/${projectId}`);
+      if (!response.ok)
+        return alert(
+          `Error fetching project ${response.status} ${response.statusText}`
+        );
+      const responseJson = Schema.GetProjectResponse.parse(
+        await response.json()
+      );
+      setProject(responseJson.project);
+    })();
+  }, []);
+  return (
+    <button
+      disabled={project == null || !project.isDraft}
+      onClick={() => {
+        void (async () => {
+          if (project == null)
+            return alert("User clicked button it should have been disabled!");
+          const newProject = { ...project, isDraft: false };
+          const body: Schema.PutProjectBody = { project: newProject };
+          const response = await adminFetch("PUT", `/projects/${projectId}`, {
+            body: JSON.stringify(body),
+          });
+          if (!response.ok)
+            return alert(
+              `Error when PUTing project ${response.status} ${response.statusText}`
+            );
+          setProject(newProject);
+        })();
+      }}
+    >
+      Publish Project
+    </button>
   );
 }
 
@@ -697,7 +756,8 @@ function EditApp() {
             if (Object.keys(projectError).length > 0) {
               const errorKey = Object.keys(projectError)[0];
               setError(projectError[errorKey]);
-              window.scrollTo(0, 0);
+              // window.scrollTo doesn't work in tests
+              if (process.env.NODE_ENV != "test") window.scrollTo(0, 0);
               return;
             }
             if (typeof project.isDraft == "undefined") {

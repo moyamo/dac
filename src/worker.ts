@@ -82,6 +82,12 @@ export function withAdmin<R extends Request>(req: R, env: Env) {
   if (admin == null) return requestBasicAuthentication();
 }
 
+let mockUser: string | null = null;
+
+export function setMockUser(user: string | null) {
+  mockUser = user;
+}
+
 async function withUser(req: Itty.IRequest, env: Env) {
   const admin = getAdmin(req, env);
   if (admin != null) {
@@ -91,6 +97,11 @@ async function withUser(req: Itty.IRequest, env: Env) {
   const googleUser = await getGoogle(req, env);
   if (googleUser != null) {
     req.user = googleUser;
+  }
+  if (process.env.NODE_ENV == "test") {
+    if (mockUser != null) {
+      req.user = mockUser;
+    }
   }
 }
 
@@ -102,7 +113,7 @@ export type AclKind = {
 
 const AclKinds: Record<AclKindId, AclKind> = {
   projects: {
-    allPermissions: ["edit"],
+    allPermissions: ["edit", "publish"],
   },
 };
 
@@ -272,8 +283,15 @@ export default {
       const resource = new URL(req.url).pathname;
       const permissions = await getAclPermissions(env, resource, req.user);
       if (!permissions.includes("edit")) return Itty.error(403);
+
       const { projectId } = req.params;
-      const jsonBody = await req.json<{ project: Schema.Project }>();
+      const jsonBody = Schema.PutProjectBody.parse(await req.json());
+
+      const prevProject = await getProject(env, projectId);
+      if ((prevProject?.isDraft ?? true) != jsonBody.project.isDraft) {
+        if (!permissions.includes("publish")) return Itty.error(403);
+      }
+
       await setProject(env, projectId, jsonBody.project);
       return {};
     });

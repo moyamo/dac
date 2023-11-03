@@ -20,6 +20,7 @@ import worker, {
   Counter,
   refundCapture,
   withAdmin,
+  setMockUser,
 } from "./worker";
 import * as Schema from "./schema";
 
@@ -204,7 +205,7 @@ describe("ACLs", () => {
       if (aclKind == null) {
         expect(aclKind).not.toBe(null);
       } else {
-        expect(aclKind.allPermissions).toStrictEqual(["edit"]);
+        expect(aclKind.allPermissions).toStrictEqual(["edit", "publish"]);
       }
     });
   });
@@ -230,7 +231,7 @@ describe("ACLs", () => {
         "/projects/test",
         "admin"
       );
-      expect(permissions).toStrictEqual(["edit"]);
+      expect(permissions).toStrictEqual(["edit", "publish"]);
     });
     it("gives an empty list when there are no permissions", async () => {
       const permissions = await getAclPermissions(
@@ -656,6 +657,20 @@ describe("Paypal Authenticated API", () => {
 
   describe("fetch", () => {
     const ctx = new ExecutionContext();
+    async function workerFetch(
+      method: string,
+      path: string,
+      other: RequestInit
+    ) {
+      return await worker.fetch(
+        new Request(`http://localhost${path}`, {
+          method,
+          ...other,
+        }),
+        env,
+        ctx
+      );
+    }
 
     it("respond with CORS headers when configured", async () => {
       env.FRONTEND_URL = "http://localcors.com";
@@ -1106,6 +1121,114 @@ describe("Paypal Authenticated API", () => {
               "Not a <i>real</i> person."
             );
             expect(jsonBody.project.isDraft).toBe(false);
+          });
+          it("user with just edit permission can edit draft", async () => {
+            try {
+              setMockUser("test@gmail.com");
+              const response1 = await workerFetch("POST", "/acls/grants", {
+                headers,
+                body: JSON.stringify({
+                  grant: {
+                    user: "test@gmail.com",
+                    resource: "/projects/myproject",
+                    permissions: ["edit"],
+                  },
+                }),
+              });
+              console.log(response1);
+
+              const response = await worker.fetch(
+                new Request("http://localhost/projects/myproject", {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    project: {
+                      fundingGoal: "200",
+                      fundingDeadline: "2023-01-01T12:01:01.000Z",
+                      refundBonusPercent: 5,
+                      defaultPaymentAmount: 10,
+                      formHeading: "Test Form Heading",
+                      description: "<b>be bold</b>",
+                      authorName: "Test Person",
+                      authorImageUrl: "http://localhost/image.jpgl",
+                      authorDescription: "Not a <i>real</i> person.",
+                      isDraft: true,
+                    },
+                  }),
+                }),
+                env,
+                ctx
+              );
+              expect(response.status).toBe(200);
+              const response2 = await worker.fetch(
+                new Request("http://localhost/projects/myproject", {
+                  method: "GET",
+                }),
+                env,
+                ctx
+              );
+              expect(response2.status).toBe(200);
+              const jsonBody = await response2.json<{
+                project: Schema.Project;
+              }>();
+              expect(jsonBody.project.fundingGoal).toBe("200");
+              expect(jsonBody.project.fundingDeadline).toBe(
+                "2023-01-01T12:01:01.000Z"
+              );
+              expect(jsonBody.project.refundBonusPercent).toBe(5);
+              expect(jsonBody.project.defaultPaymentAmount).toBe(10);
+              expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+              expect(jsonBody.project.description).toBe("<b>be bold</b>");
+              expect(jsonBody.project.authorName).toBe("Test Person");
+              expect(jsonBody.project.authorImageUrl).toBe(
+                "http://localhost/image.jpgl"
+              );
+              expect(jsonBody.project.authorDescription).toBe(
+                "Not a <i>real</i> person."
+              );
+              expect(jsonBody.project.isDraft).toBe(true);
+            } finally {
+              setMockUser(null);
+            }
+          });
+          it("user with just edit permission can't publish", async () => {
+            try {
+              setMockUser("test@gmail.com");
+              await workerFetch("POST", "/acls/grants", {
+                headers,
+                body: JSON.stringify({
+                  grant: {
+                    user: "test@gmail.com",
+                    resource: "/projects/myproject",
+                    permissions: ["edit"],
+                  },
+                }),
+              });
+
+              const response = await worker.fetch(
+                new Request("http://localhost/projects/myproject", {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    project: {
+                      fundingGoal: "200",
+                      fundingDeadline: "2023-01-01T12:01:01.000Z",
+                      refundBonusPercent: 5,
+                      defaultPaymentAmount: 10,
+                      formHeading: "Test Form Heading",
+                      description: "<b>be bold</b>",
+                      authorName: "Test Person",
+                      authorImageUrl: "http://localhost/image.jpgl",
+                      authorDescription: "Not a <i>real</i> person.",
+                      isDraft: false,
+                    },
+                  }),
+                }),
+                env,
+                ctx
+              );
+              expect(response.status).toBe(403);
+            } finally {
+              setMockUser(null);
+            }
           });
         });
         describe("GET /projects/:projectId", () => {
