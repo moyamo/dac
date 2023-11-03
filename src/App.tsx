@@ -212,7 +212,7 @@ function App(props: AppProps) {
     ReactRouterDom.useLoaderData() as ProjectLoader;
   if (typeof projectId === "undefined") throw Error("projectId undefined");
   const [funded, setFunded] = React.useState(false);
-  const [amountRef, setAmount] = useStateRef(
+  const [amountRef, setAmount] = useStateRef<string | number>(
     project?.defaultPaymentAmount ?? 89
   );
   const [progress, setProgress] = React.useState(-1);
@@ -254,7 +254,7 @@ function App(props: AppProps) {
                   max="500"
                   value={amountRef.current}
                   step="1"
-                  onChange={(e) => setAmount(Number(e.target.value))}
+                  onChange={(e) => setAmount(e.target.value)}
                 />
                 {!project.isDraft ? null : (
                   <p>
@@ -277,7 +277,7 @@ function App(props: AppProps) {
                     FUNDING.PAYPAL
                   }
                   onClick={(_data: unknown, actions: OnClickActions) => {
-                    const amount = amountRef.current;
+                    const amount = Number(amountRef.current);
                     if (project.isDraft) {
                       return actions.reject();
                     }
@@ -295,7 +295,9 @@ function App(props: AppProps) {
                       `${WORKER_URL}/projects/${projectId}/contract`,
                       {
                         method: "POST",
-                        body: JSON.stringify({ amount: amountRef.current }),
+                        body: JSON.stringify({
+                          amount: Number(amountRef.current),
+                        }),
                       }
                     );
                     const responseJson = Paypal.CreateOrderResponse.parse(
@@ -321,12 +323,14 @@ function App(props: AppProps) {
                   }}
                 />
                 <p>
-                  {getInvalidAmountError(amountRef.current) || (
+                  {getInvalidAmountError(Number(amountRef.current)) || (
                     <>
-                      {`Thanks for pledging $${amountRef.current}! If we do not reach our goal you will get a`}{" "}
+                      {`Thanks for pledging $${Number(
+                        amountRef.current
+                      )}! If we do not reach our goal you will get a`}{" "}
                       <strong>
                         {`$${(
-                          (amountRef.current *
+                          (Number(amountRef.current) *
                             (100.0 + project.refundBonusPercent)) /
                           100.0
                         ).toFixed(2)}`}
