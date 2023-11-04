@@ -54,3 +54,9 @@ form {
   padding: 1em;
   border-radius: 12px;
 }
+
+.fine-print {
+  margin: 0 0 1em 0;
+  border-radius: 12px;
+  font-size: small;
+}

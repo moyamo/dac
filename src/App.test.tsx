@@ -532,6 +532,13 @@ describe("EditApp Validation", () => {
       await testPreventsEmpty("Author Description");
     });
   });
+
+  it("explains paypal fees", async () => {
+    await changeInput("Funding Goal", "30");
+    expect(await screen.findByText(/5% to 10%/)).toBeInTheDocument();
+    expect(await screen.findByText(/\$27.00/)).toBeInTheDocument();
+    expect(await screen.findByText(/\$28.50/)).toBeInTheDocument();
+  });
 });
 
 test("PublishProject is disabled until project loaded", async () => {

@@ -784,6 +784,13 @@ function EditApp() {
           }}
         >
           <ProjectInput type="text" label="Funding Goal" />
+          {project.fundingGoal ? (
+            <div className="fine-print">
+              PayPal between 5% to 10% in fees, so you will only receive between
+              ${(Number(project.fundingGoal) * 0.9).toFixed(2)} to $
+              {(Number(project.fundingGoal) * 0.95).toFixed(2)}
+            </div>
+          ) : null}
           <ProjectInput type="datetime-local" label="Funding Deadline" />
           <ProjectInput type="number" label="Refund Bonus Percent" />
           <ProjectInput type="number" label="Default Payment Amount" />
