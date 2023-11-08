@@ -102,7 +102,7 @@ function TopLevel(props: TopLevelProps) {
     <SetCredentialsContext.Provider value={setCredentials}>
       <CredentialsContext.Provider value={credentials}>
         <header>
-          <h1>{`Refund Bonus${
+          <h1>{`EnsureDone ${
             headerParenthesis ? ` (${headerParenthesis})` : ""
           }`}</h1>
         </header>

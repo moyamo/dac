@@ -247,14 +247,14 @@ test("App in-progress", async () => {
 test("headerParenthesis", async () => {
   render(<MockApp headerParenthesis="header paren" />);
   expect(
-    await screen.findByText("Refund Bonus (header paren)")
+    await screen.findByText("EnsureDone (header paren)")
   ).toBeInTheDocument();
 });
 
 test("headerParenthesis empty", async () => {
   render(<MockApp />);
-  expect(await screen.findByText("Refund Bonus")).toBeInTheDocument();
-  expect(screen.queryByText("Refund Bonus ()")).not.toBeInTheDocument();
+  expect(await screen.findByText("EnsureDone")).toBeInTheDocument();
+  expect(screen.queryByText("EnsureDone ()")).not.toBeInTheDocument();
 });
 
 test("Payment defaults to project.defaultPaymentAmount", async () => {
