@@ -539,6 +539,25 @@ describe("EditApp Validation", () => {
     expect(await screen.findByText(/\$27.00/)).toBeInTheDocument();
     expect(await screen.findByText(/\$28.50/)).toBeInTheDocument();
   });
+
+  describe("disables when published", () => {
+    beforeEach(() => {
+      project.isDraft = false;
+    });
+    it("funding goal", () => {
+      expect(screen.getByLabelText("Funding Goal")).toHaveAttribute("disabled");
+    });
+    it("funding deadline", () => {
+      expect(screen.getByLabelText("Funding Deadline")).toHaveAttribute(
+        "disabled"
+      );
+    });
+    it("refund bonus percent", () => {
+      expect(screen.getByLabelText("Refund Bonus Percent")).toHaveAttribute(
+        "disabled"
+      );
+    });
+  });
 });
 
 test("PublishProject is disabled until project loaded", async () => {

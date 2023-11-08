@@ -1230,6 +1230,49 @@ describe("Paypal Authenticated API", () => {
               setMockUser(null);
             }
           });
+          it("can't change certain parameters after published", async () => {
+            const project = {
+              fundingGoal: "200",
+              fundingDeadline: "2023-01-01T12:01:01.000Z",
+              refundBonusPercent: 5,
+              defaultPaymentAmount: 10,
+              formHeading: "Test Form Heading",
+              description: "<b>be bold</b>",
+              authorName: "Test Person",
+              authorImageUrl: "http://localhost/image.jpgl",
+              authorDescription: "Not a <i>real</i> person.",
+              isDraft: false,
+            };
+            const response = await workerFetch("PUT", "/projects/myproject", {
+              headers,
+              body: JSON.stringify({ project }),
+            });
+            expect(response.status).toBe(200);
+            const response2 = await workerFetch("PUT", "/projects/myproject", {
+              headers,
+              body: JSON.stringify({
+                project: { ...project, fundingGoal: "300" },
+              }),
+            });
+            expect(response2.status).toBe(403);
+            const response3 = await workerFetch("PUT", "/projects/myproject", {
+              headers,
+              body: JSON.stringify({
+                project: {
+                  ...project,
+                  fundingDeadline: "2024-01-01T12:01:01.000Z",
+                },
+              }),
+            });
+            expect(response3.status).toBe(403);
+            const response4 = await workerFetch("PUT", "/projects/myproject", {
+              headers,
+              body: JSON.stringify({
+                project: { ...project, refundBonusPercent: 10 },
+              }),
+            });
+            expect(response4.status).toBe(403);
+          });
         });
         describe("GET /projects/:projectId", () => {
           it("refundBonusPercent defaults to 20, defaultPaymentAmount to 89 and isDraft to false", async () => {

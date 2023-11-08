@@ -624,7 +624,10 @@ const ProjectErrorContext = React.createContext<
   UseState<Record<string, string>>
 >([{}, (_mP) => null]);
 
-function ProjectInput({ type, label }: { type: string; label: string }) {
+type ProjectInputProps = { type: string; label: string; disabled?: boolean };
+
+function ProjectInput(props: ProjectInputProps) {
+  const { type, label, disabled } = props;
   const [project, setProject] = React.useContext(ProjectStateContext);
   const [projectError, setProjectError] = React.useContext(ProjectErrorContext);
   function onFirstChar(f: (s: string) => string) {
@@ -691,6 +694,7 @@ function ProjectInput({ type, label }: { type: string; label: string }) {
     name,
     value: projectToInput(project),
     id,
+    disabled,
     ["aria-required"]: true,
     ["aria-invalid"]: errorMessage ? true : false,
     ["aria-describedby"]: errorMessage ? errorMessageId : undefined,
@@ -783,7 +787,11 @@ function EditApp() {
             })();
           }}
         >
-          <ProjectInput type="text" label="Funding Goal" />
+          <ProjectInput
+            type="text"
+            label="Funding Goal"
+            disabled={project.isDraft == false}
+          />
           {project.fundingGoal ? (
             <div className="fine-print">
               PayPal between 5% to 10% in fees, so you will only receive between
@@ -791,8 +799,16 @@ function EditApp() {
               {(Number(project.fundingGoal) * 0.95).toFixed(2)}
             </div>
           ) : null}
-          <ProjectInput type="datetime-local" label="Funding Deadline" />
-          <ProjectInput type="number" label="Refund Bonus Percent" />
+          <ProjectInput
+            type="datetime-local"
+            label="Funding Deadline"
+            disabled={project.isDraft == false}
+          />
+          <ProjectInput
+            type="number"
+            label="Refund Bonus Percent"
+            disabled={project.isDraft == false}
+          />
           <ProjectInput type="number" label="Default Payment Amount" />
           <ProjectInput type="text" label="Form Heading" />
           <ProjectInput type="textarea" label="Description" />

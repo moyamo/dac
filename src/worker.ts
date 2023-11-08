@@ -285,14 +285,24 @@ export default {
       if (!permissions.includes("edit")) return Itty.error(403);
 
       const { projectId } = req.params;
-      const jsonBody = Schema.PutProjectBody.parse(await req.json());
+      const { project } = Schema.PutProjectBody.parse(await req.json());
 
       const prevProject = await getProject(env, projectId);
-      if ((prevProject?.isDraft ?? true) != jsonBody.project.isDraft) {
+      if ((prevProject?.isDraft ?? true) != project.isDraft) {
         if (!permissions.includes("publish")) return Itty.error(403);
       }
 
-      await setProject(env, projectId, jsonBody.project);
+      if (prevProject != null && !prevProject.isDraft) {
+        // Can't change these parameters after the project is published
+        if (
+          prevProject.fundingDeadline != project.fundingDeadline ||
+          prevProject.fundingGoal != project.fundingGoal ||
+          prevProject.refundBonusPercent != project.refundBonusPercent
+        )
+          return Itty.error(403);
+      }
+
+      await setProject(env, projectId, project);
       return {};
     });
 
