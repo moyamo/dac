@@ -21,6 +21,7 @@ import worker, {
   refundCapture,
   withAdmin,
   setMockUser,
+  getCapture,
 } from "./worker";
 import * as Schema from "./schema";
 
@@ -414,6 +415,36 @@ describe("Paypal Authenticated API", () => {
     });
   });
 
+  describe("getCapture", () => {
+    it("works", async () => {
+      // Create order
+      const response = await createOrder("5.00", env);
+      const orderId = response.id;
+      // Mock user approving charge
+      await fetch(`${paypalMockUrl}/mock/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "testemail@example.com",
+          orderId: orderId,
+          givenName: "James",
+          surname: "Smith",
+        }),
+      });
+      // capture payment
+      const r = await capturePayment(orderId, env);
+      const captureId = r.purchase_units[0].payments.captures[0].id;
+      // Finally, getCatpure
+      const capture = await getCapture(captureId, env);
+      const srb = capture.seller_receivable_breakdown;
+      expect(srb.paypal_fee.value).toBe("0.50");
+      expect(srb.net_amount.value).toBe("4.50");
+      expect(srb.gross_amount.value).toBe("5.00");
+    });
+  });
+
   describe("refundCapture", () => {
     it("works", async () => {
       // Create order
@@ -660,8 +691,9 @@ describe("Paypal Authenticated API", () => {
     async function workerFetch(
       method: string,
       path: string,
-      other: RequestInit
+      other?: RequestInit
     ) {
+      other = other ?? {};
       return await worker.fetch(
         new Request(`http://localhost${path}`, {
           method,
@@ -889,6 +921,16 @@ describe("Paypal Authenticated API", () => {
             }),
             env,
             ctx
+          );
+          expect(response.status).toBe(401);
+          // This is also google authenticated, so asking for basic
+          // authentication would be confusing.
+          expect(response.headers.get("WWW-Authenticate")).toBeNull();
+        });
+        it("GET /projects/:projectId/successInvoice", async () => {
+          const response = await workerFetch(
+            "GET",
+            "/projects/test/successInvoice"
           );
           expect(response.status).toBe(401);
           // This is also google authenticated, so asking for basic
@@ -1314,6 +1356,74 @@ describe("Paypal Authenticated API", () => {
               "Not a <i>real</i> person."
             );
             expect(jsonBody.project.isDraft).toBe(false);
+          });
+        });
+        describe("GET /projects/:projectId/successInvoice", () => {
+          async function fund(amount: number) {
+            const response = await workerFetch(
+              "POST",
+              "/projects/test/contract",
+              {
+                body: JSON.stringify({ amount }),
+              }
+            );
+            const orderId = Paypal.CreateOrderResponse.parse(
+              await response.json()
+            ).id;
+
+            await fetch(`${paypalMockUrl}/mock/approve`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                email: "testemail@example.com",
+                orderId: orderId,
+                givenName: "John",
+                surname: "Doe",
+              }),
+            });
+
+            await workerFetch("PATCH", `/projects/test/contract/${orderId}`);
+          }
+          it("returns 404 when not funded fully", async () => {
+            await fund(15);
+            await setProject({
+              ...defaultProject,
+              fundingGoal: "200",
+              fundingDeadline: "2023-01-01T10:10:10Z",
+            });
+
+            const response3 = await workerFetch(
+              "GET",
+              "/projects/test/successInvoice",
+              {
+                headers,
+              }
+            );
+            expect(response3.status).toBe(404);
+          });
+          it("returns successInvoice when fully funded", async () => {
+            await fund(300);
+            await setProject({
+              ...defaultProject,
+              fundingDeadline: "2023-01-01T10:10:10Z",
+            });
+            const response3 = await workerFetch(
+              "GET",
+              "/projects/test/successInvoice",
+              {
+                headers,
+              }
+            );
+            expect(response3.status).toBe(200);
+            const responseBody = Schema.GetProjectSuccessInvoiceResponse.parse(
+              await response3.json()
+            );
+            expect(responseBody.successInvoice).toHaveLength(1);
+            expect(responseBody.successInvoice[0].name).toBe("John Doe");
+            expect(responseBody.successInvoice[0].amount).toBe(300);
+            expect(responseBody.successInvoice[0].paypalFee).toBe(12.3);
           });
         });
       });

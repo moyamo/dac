@@ -109,9 +109,10 @@ wrong.
 4. Wait until deadline passed.
 5. The /refund route should return 404.
 6. No more funds are accepted.
-7. Navigate to /admin
-8. Type "admin" as username and <ADMIN_PASSWORD> as password.
-9. There should be no bonuses to pay out.
+7. Navigate to /successInvoice. The invoice should be displayed.
+8. Navigate to /admin
+9. Type "admin" as username and <ADMIN_PASSWORD> as password.
+10. There should be no bonuses to pay out.
 
 ### Project not fully funded.
 
@@ -122,11 +123,12 @@ wrong.
 5. The /refund route should refund a funder until all funders have been
    refunded.
 6. No more funds are accepted.
-7. Navigate to /admin
-8. Type "admin" as username and <ADMIN_PASSWORD> as password.
-9. There should be a list of bonuses that need to be payed out.
-10. Log-in to paypal and payout the bonuses manually marking them off as you go.
-11. Refresh the /admin page. THe marked off payments should not be visable.
+7. Navigate to /successInvoice. You should get a 404.
+8. Navigate to /admin
+9. Type "admin" as username and <ADMIN_PASSWORD> as password.
+10. There should be a list of bonuses that need to be payed out.
+11. Log-in to paypal and payout the bonuses manually marking them off as you go.
+12. Refresh the /admin page. THe marked off payments should not be visable.
 
 ### Let people use a draft project
 

@@ -99,6 +99,34 @@ export const CapturePaymentResponse = z.object({
 
 export type CapturePaymentResponse = z.infer<typeof CapturePaymentResponse>;
 
+export const GetCaptureResponse = z.object({
+  id: z.string(),
+  create_time: z.string(),
+  update_time: z.string(),
+  status: z.string(),
+  final_capture: z.boolean(),
+  amount: AmountWithCurrency,
+  links: z.array(Link),
+  payee: z.object({
+    email_address: z.string(),
+    merchant_id: z.string(),
+  }),
+  seller_protection: z.object({
+    dispute_categories: z.array(z.string()),
+    status: z.string(),
+  }),
+  seller_receivable_breakdown: z.object({
+    gross_amount: AmountWithCurrency,
+    net_amount: AmountWithCurrency,
+    paypal_fee: AmountWithCurrency,
+  }),
+  supplementary_data: z.object({
+    related_ids: z.record(z.string()),
+  }),
+});
+
+export type GetCaptureResponse = z.infer<typeof GetCaptureResponse>;
+
 export const RefundCaptureResponse = z.object({
   id: z.string(),
   status: z.string(),

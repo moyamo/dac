@@ -202,6 +202,39 @@ export default function () {
       }
     });
 
+  function commonCapture(count: number) {
+    return {
+      id: `${captureId}${count}`,
+      amount: {
+        currency_code: "USD",
+        value: closure.amountUsd,
+      },
+      create_time: "?",
+      status: "?",
+      update_time: "?",
+      final_capture: true,
+      links: [],
+      seller_protection: {
+        dispute_categories: [],
+        status: "",
+      },
+      seller_receivable_breakdown: {
+        gross_amount: {
+          currency_code: "USD",
+          value: closure.amountUsd,
+        },
+        net_amount: {
+          currency_code: "USD",
+          value: (Number(closure.amountUsd) * 0.96 - 0.3).toFixed(2),
+        },
+        paypal_fee: {
+          currency_code: "USD",
+          value: (Number(closure.amountUsd) * 0.04 + 0.3).toFixed(2),
+        },
+      },
+    };
+  }
+
   function capture(count: number) {
     return withAuthorization(() => {
       console.log("Capture Amount USD", closure.amountUsd);
@@ -226,38 +259,7 @@ export default function () {
           purchase_units: [
             {
               payments: {
-                captures: [
-                  {
-                    id: `${captureId}${count}`,
-                    amount: {
-                      currency_code: "USD",
-                      value: closure.amountUsd,
-                    },
-                    create_time: "?",
-                    final_capture: true,
-                    links: [],
-                    seller_protection: {
-                      dispute_categories: [],
-                      status: "",
-                    },
-                    status: "?",
-                    update_time: "?",
-                    seller_receivable_breakdown: {
-                      gross_amount: {
-                        currency_code: "USD",
-                        value: closure.amountUsd,
-                      },
-                      net_amount: {
-                        currency_code: "USD",
-                        value: (Number(closure.amountUsd) * 0.99).toFixed(2),
-                      },
-                      paypal_fee: {
-                        currency_code: "USD",
-                        value: (Number(closure.amountUsd) * 0.01).toFixed(2),
-                      },
-                    },
-                  },
-                ],
+                captures: [commonCapture(count)],
               },
               reference_id: "?",
               shipping: {},
@@ -268,6 +270,7 @@ export default function () {
       };
     });
   }
+
   paypalSandbox
     .intercept({
       method: "POST",
@@ -280,7 +283,40 @@ export default function () {
       method: "POST",
       path: `/v2/checkout/orders/${orderId}1/capture`,
     })
-    .reply(capture(0));
+    .reply(capture(1));
+
+  function getCapture(count: number) {
+    return withAuthorization(() => {
+      return {
+        statusCode: 200,
+        data: JSON.stringify({
+          ...commonCapture(count),
+          payee: {
+            email_address: "?",
+            merchant_id: "?",
+          },
+          supplementary_data: {
+            related_ids: {
+              order_id: `${orderId}${count}`,
+            },
+          },
+        }),
+      };
+    });
+  }
+  paypalSandbox
+    .intercept({
+      method: "GET",
+      path: `/v2/payments/captures/${captureId}0`,
+    })
+    .reply(getCapture(0));
+
+  paypalSandbox
+    .intercept({
+      method: "GET",
+      path: `/v2/payments/captures/${captureId}1`,
+    })
+    .reply(getCapture(1));
 
   function refund(count: number) {
     return withAuthorization(() => {

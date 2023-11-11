@@ -362,6 +362,7 @@ test("capture payment", async () => {
         delay: 20,
       });
       await page.click("button[type=submit]");
+      await page.waitForNetworkIdle();
       await page.waitForSelector("input[type=password]", { visible: true });
       await page.type("input[type=password]", PAYPAL_SANDBOX_EMAIL_1_PASSWORD, {
         delay: 20,
@@ -398,7 +399,7 @@ test("capture payment", async () => {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const body2 = await response2.json<Paypal.CapturePaymentResponse>();
+  const body2 = Paypal.CapturePaymentResponse.parse(await response2.json());
 
   expect(response2.status).toBe(201);
   // There is quite a big response,
@@ -418,7 +419,37 @@ test("capture payment", async () => {
   const capture = body2.purchase_units[0].payments.captures[0];
   expect(capture.amount.currency_code).toBe("USD");
   expect(capture.amount.value).toBe(amountUsd);
+  const srb = capture.seller_receivable_breakdown;
+  expect(srb.gross_amount.currency_code).toBe("USD");
+  expect(srb.gross_amount.value).toBe(amountUsd);
+  const fee = "0.50";
+  expect(srb.net_amount.value).toBe(
+    (Number(amountUsd) - Number(fee)).toFixed(2)
+  );
+  expect(srb.net_amount.currency_code).toBe("USD");
+  expect(srb.paypal_fee.value).toBe(fee);
+  expect(srb.paypal_fee.currency_code).toBe("USD");
+
   expect(capture.id.length).toBeGreaterThanOrEqual(1);
+
+  // Check that GET gives the same response as post
+  const response3 = await fetch(
+    `${baseURL.sandbox}/v2/payments/captures/${capture.id}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  const body3 = Paypal.GetCaptureResponse.parse(await response3.json());
+  const { payee, supplementary_data, ...commonCapture } = body3;
+  expect(commonCapture).toStrictEqual(capture);
+  expect(payee).toHaveProperty("email_address");
+  expect(payee).toHaveProperty("merchant_id");
+  expect(supplementary_data.related_ids.order_id).toBe(orderId);
 }, 30000 /* ms. Increase timout it since we open chrome which could
             take a while. */);
 
@@ -459,6 +490,7 @@ test("Refund Paypal payment", async () => {
         delay: 20,
       });
       await page.click("button[type=submit]");
+      await page.waitForNetworkIdle();
       await page.waitForSelector("input[type=password]", { visible: true });
       await page.type("input[type=password]", PAYPAL_SANDBOX_EMAIL_1_PASSWORD, {
         delay: 20,

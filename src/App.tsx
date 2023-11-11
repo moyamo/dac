@@ -168,6 +168,11 @@ export function routes({
           loader: projectLoader,
           element: <EditApp />,
         },
+        {
+          path: "/projects/:projectId/successInvoice",
+          loader: successInvoiceLoader,
+          element: <SuccessInvoiceApp />,
+        },
       ],
     },
   ];
@@ -301,7 +306,7 @@ function App(props: AppProps) {
                       }
                     );
                     const responseJson = Paypal.CreateOrderResponse.parse(
-                      await response.json()
+                      await response.json<unknown>()
                     );
                     return responseJson.id;
                   }}
@@ -885,6 +890,102 @@ function AclEditor(props: AclEditorProps) {
         />
         <input type="submit" value="Share Edit Access" />
       </form>
+    </>
+  );
+}
+
+async function successInvoiceLoader({ request, params }: LoaderFunctionArgs) {
+  const { projectId } = params;
+  if (typeof projectId == "undefined") {
+    return { error: "project undefined" };
+  }
+  const response = await authFetch(
+    "GET",
+    `/projects/${projectId}/successInvoice`
+  );
+  if (response == "logout") {
+    return ReactRouterDom.redirect(
+      `/login?redirect=${new URL(request.url).pathname}&logout=true`
+    );
+  }
+  if (!response.ok) {
+    throw Error(`${response.status} when fetching successInvoice`);
+  }
+  return await response.json();
+}
+
+function SuccessInvoiceApp() {
+  const { projectId } = ReactRouterDom.useParams();
+  const { successInvoice, authorName } =
+    Schema.GetProjectSuccessInvoiceResponse.parse(
+      ReactRouterDom.useLoaderData()
+    );
+
+  successInvoice.sort((a, b) => (a.time < b.time ? -1 : 1));
+
+  return (
+    <>
+      <button
+        style={{ float: "right", margin: "24px 0 12px 0", height: "33.6px" }}
+        onClick={() => window.print()}
+      >
+        {" "}
+        Print{" "}
+      </button>
+      <h2>Invoice for {projectId} </h2>
+
+      <h3> Payed </h3>
+      <table>
+        <thead>
+          <tr>
+            <th> Time ({getLocalTimezoneShortName()}) </th>
+            <th> Name </th>
+            <th style={{ textAlign: "right" }}> Amount ($) </th>
+            <th style={{ textAlign: "right" }}> Paypal Fee ($) </th>
+          </tr>
+        </thead>
+        <tbody>
+          {successInvoice.map((o) => (
+            <tr key={o.time}>
+              <td> {formatTime(o.time)} </td>
+              <td> {o.name} </td>
+              <td style={{ textAlign: "right" }}> {o.amount.toFixed(2)} </td>
+              <td style={{ textAlign: "right" }}> {o.paypalFee} </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td></td>
+            <th>Subtotal</th>
+            <td style={{ textAlign: "right" }}>
+              {successInvoice.reduce((sum, o) => sum + o.amount, 0).toFixed(2)}
+            </td>
+            <td></td>
+          </tr>
+          <tr>
+            <td></td>
+            <th>Paypal Fees</th>
+            <td style={{ textAlign: "right" }}>
+              {successInvoice
+                .reduce((sum, o) => sum + o.paypalFee, 0)
+                .toFixed(2)}
+            </td>
+            <td></td>
+          </tr>
+          <tr>
+            <td></td>
+            <th>Total</th>
+            <th style={{ textAlign: "right" }}>
+              {successInvoice
+                .reduce((sum, o) => sum + o.amount - o.paypalFee, 0)
+                .toFixed(2)}
+            </th>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      <h3> Pay to {authorName} </h3>
     </>
   );
 }

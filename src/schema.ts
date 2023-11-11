@@ -58,6 +58,24 @@ export type GetProjectBonusesResponse = z.infer<
   typeof GetProjectBonusesResponse
 >;
 
+export const SuccessInvoice = z.array(
+  z.object({
+    time: z.string(),
+    name: z.string(),
+    amount: z.number(),
+    paypalFee: z.number(),
+  })
+);
+export type SuccessInvoice = z.infer<typeof SuccessInvoice>;
+
+export const GetProjectSuccessInvoiceResponse = z.object({
+  successInvoice: SuccessInvoice,
+  authorName: z.string(),
+});
+export type GetProjectSuccessInvoiceResponse = z.infer<
+  typeof GetProjectSuccessInvoiceResponse
+>;
+
 export const AclUser = z.string().refine((_v) => true); // TODO refine
 export type AclUser = z.infer<typeof AclUser>;
 

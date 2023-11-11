@@ -238,6 +238,8 @@ export default {
         " " +
         response.payment_source.paypal.name.surname;
       const amount = Number(capture.amount.value);
+      const srb = capture.seller_receivable_breakdown;
+      const paypalFee = Number(srb.paypal_fee.value);
       const refundBonusPercent = project.refundBonusPercent;
       const time = new Date().toISOString();
       const obj = Counter.fromName(env, projectId);
@@ -247,6 +249,7 @@ export default {
           returnAddress,
           captureId,
           amount,
+          paypalFee,
           name,
           refundBonusPercent,
           time,
@@ -304,6 +307,21 @@ export default {
 
       await setProject(env, projectId, project);
       return {};
+    });
+
+    router.get("/projects/:projectId/successInvoice", withUser, async (req) => {
+      if (typeof req.user != "string") return Itty.error(401);
+      const { projectId } = req.params;
+      const resource = `/projects/${projectId}`;
+      const permissions = await getAclPermissions(env, resource, req.user);
+      if (!permissions.includes("edit")) return Itty.error(403);
+
+      const url = new URL(req.url);
+      const obj = Counter.fromName(env, projectId);
+      const response = await obj.fetch(
+        `${url.origin}/successInvoice?projectId=${projectId}`
+      );
+      return response;
     });
 
     router.post("/projects/:projectId/refund", withAdmin, async (req) => {
@@ -433,6 +451,7 @@ type PutContractBody = {
   returnAddress: string;
   captureId: string;
   amount: number;
+  paypalFee: number;
   name: string;
   refundBonusPercent: number;
   time: string;
@@ -447,6 +466,56 @@ export class Counter implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+
+    void this.state.blockConcurrencyWhile(async () => {
+      const version = (await this.state.storage.get("version")) ?? 0;
+      if (version == 0) {
+        console.info(
+          `Upgrading Durable Object Counter from v0 to v1: ${
+            this.state.id.name ?? "null"
+          } (${this.state.id.toString()})`
+        );
+        type InternalOrderV0 = {
+          returnAddress: string;
+          captureId: string;
+          refunded: boolean;
+          amount: number;
+          bonus: {
+            amount: number;
+            refunded: boolean;
+          };
+          name: string;
+          time: string;
+        };
+        type OrderMapV0 = { [orderId: string]: InternalOrderV0 };
+        const orderMap: OrderMapV0 =
+          (await this.state.storage.get("orderMap")) || {};
+        type InternalOrderV1 = InternalOrderV0 & { paypalFee: number };
+        type OrderMapV1 = { [orderId: string]: InternalOrderV1 };
+        const newOrderMap: OrderMapV1 = Object.fromEntries<InternalOrderV1>(
+          await Promise.all(
+            Object.entries(orderMap).map<Promise<[string, InternalOrderV1]>>(
+              ([orderId, order]) =>
+                (async () => {
+                  console.info(`Fetching fee for capture ${order.captureId}`);
+                  const capture = await getCapture(order.captureId, this.env);
+                  return [
+                    orderId,
+                    {
+                      ...order,
+                      paypalFee: Number(
+                        capture.seller_receivable_breakdown.paypal_fee.value
+                      ),
+                    },
+                  ];
+                })()
+            )
+          )
+        );
+        await this.state.storage.put("orderMap", newOrderMap);
+        await this.state.storage.put("version", 1);
+      }
+    });
   }
 
   static fromName(env: Env, name: string) {
@@ -468,6 +537,7 @@ export class Counter implements DurableObject {
       captureId: string;
       refunded: boolean;
       amount: number;
+      paypalFee: number;
       bonus: {
         amount: number;
         refunded: boolean;
@@ -508,6 +578,7 @@ export class Counter implements DurableObject {
         captureId: body.captureId,
         refunded: false,
         amount: body.amount,
+        paypalFee: body.paypalFee,
         bonus: {
           refunded: false,
           amount: Number(
@@ -519,6 +590,33 @@ export class Counter implements DurableObject {
       };
       await this.state.storage.put("orderMap", orderMap);
       return "";
+    });
+
+    router.get("/successInvoice", async (req) => {
+      if (req.query.projectId == null) return Itty.error(400);
+      if (Array.isArray(req.query.projectId)) return Itty.error(400);
+      const project = await getProject(this.env, req.query.projectId);
+      if (project == null) return Itty.error(404);
+      if (!hasFundingDeadlinePassed(project.fundingDeadline)) {
+        return Itty.error(404);
+      }
+      const orderMap: OrderMap =
+        (await this.state.storage.get("orderMap")) || {};
+
+      const totalAmount = Object.values(orderMap).reduce(
+        (total, o) => total + o.amount,
+        0
+      );
+      if (totalAmount < Number(project.fundingGoal)) return Itty.error(404);
+
+      const successInvoice = Object.values(orderMap).map((o) => ({
+        time: o.time,
+        name: o.name,
+        amount: o.amount,
+        paypalFee: o.paypalFee,
+      }));
+      const response = { successInvoice, authorName: project.authorName };
+      return response;
     });
 
     router.get("/refunds", async (req) => {
@@ -669,6 +767,25 @@ export async function capturePayment(
     },
   });
   const data = Paypal.CapturePaymentResponse.parse(await response.json());
+  return data;
+}
+
+export async function getCapture(
+  captureId: string,
+  env: Env
+): Promise<Paypal.GetCaptureResponse> {
+  if (typeof env.PAYPAL_API_URL == "undefined")
+    throw new TypeError("PAYPAL_API_URL is undefined");
+  const accessToken = await generateAccessToken(env);
+  const url = `${env.PAYPAL_API_URL}/v2/payments/captures/${captureId}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const data = Paypal.GetCaptureResponse.parse(await response.json());
   return data;
 }
 
