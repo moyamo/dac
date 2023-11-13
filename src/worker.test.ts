@@ -38,6 +38,41 @@ beforeEach(() => {
   env.PAYPAL_API_URL = paypalMockUrl;
 });
 
+const defaultProject = {
+  fundingGoal: "200",
+  // default to the future for most tests
+  fundingDeadline: (() => {
+    const future = new Date();
+    future.setHours(future.getHours() + 24);
+    return future.toISOString();
+  })(),
+  refundBonusPercent: 20,
+  defaultPaymentAmount: 89,
+  formHeading: "Test Form Heading",
+  description: "<b>be bold</b>",
+  authorName: "Test Person",
+  authorImageUrl: "http://localhost/image.jpg",
+  authorDescription: "Not a <i>real</i> person.",
+  isDraft: false,
+};
+async function setProject(project: Schema.Project) {
+  if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
+  return await env.PROJECTS.put("test", JSON.stringify(project));
+}
+
+const ctx = new ExecutionContext();
+async function workerFetch(method: string, path: string, other?: RequestInit) {
+  other = other ?? {};
+  return await worker.fetch(
+    new Request(`http://localhost${path}`, {
+      method,
+      ...other,
+    }),
+    env,
+    ctx
+  );
+}
+
 describe("generateAccessToken", () => {
   it("throws TypeError when PAYPAL_CLIENT_ID or PAYPAL_APP_SECRET undefined", async () => {
     delete env.PAYPAL_APP_SECRET;
@@ -257,21 +292,6 @@ describe("ACLs", () => {
     });
   });
   describe("fetch", () => {
-    const ctx = new ExecutionContext();
-    async function workerFetch(
-      method: string,
-      path: string,
-      other: RequestInit
-    ) {
-      return await worker.fetch(
-        new Request(`http://localhost${path}`, {
-          method,
-          ...other,
-        }),
-        env,
-        ctx
-      );
-    }
     describe("POST /acls/grants", () => {
       const body = JSON.stringify({
         grant: {
@@ -336,32 +356,9 @@ describe("ACLs", () => {
 });
 
 describe("Paypal Authenticated API", () => {
-  async function setProject(project: Schema.Project) {
-    if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
-    return await env.PROJECTS.put("test", JSON.stringify(project));
-  }
-
-  const future = new Date();
-  future.setHours(future.getHours() + 24);
-  const futureFundingDeadline = future.toISOString();
-  const defaultProject = {
-    fundingGoal: "200",
-    fundingDeadline: futureFundingDeadline,
-    refundBonusPercent: 20,
-    defaultPaymentAmount: 89,
-    formHeading: "Test Form Heading",
-    description: "<b>be bold</b>",
-    authorName: "Test Person",
-    authorImageUrl: "http://localhost/image.jpg",
-    authorDescription: "Not a <i>real</i> person.",
-    isDraft: false,
-  };
-
-  beforeEach(async () => {
+  beforeEach(() => {
     env.PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "valid_client_id";
     env.PAYPAL_APP_SECRET = process.env.PAYPAL_APP_SECRET || "valid_app_secret";
-    // default to the future for most tests
-    await setProject(defaultProject);
   });
 
   describe("payout", () => {
@@ -473,365 +470,486 @@ describe("Paypal Authenticated API", () => {
       expect(r.status).toBe("COMPLETED");
     });
   });
+});
 
-  describe("Counter", () => {
-    describe("GET /counter", () => {
-      it("returns 0 when uninitialized", async () => {
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch("http://localhost/counter");
-        const responseJson = Schema.GetProjectCounterResponse.parse(
-          await response.json()
-        );
-        expect(responseJson.amount).toBe(0);
-        expect(responseJson.orders).toHaveLength(0);
-      });
-    });
-    describe("PUT /contract/:contract", () => {
-      it("add an $11 contract", async () => {
-        const counter = Counter.fromName(env, "test");
-
-        await counter.fetch("http://localhost/contract/contractOne", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            returnAddress: "email_address",
-            amount: 11,
-            name: "John Doe",
-            time: "2023-01-01T01:01:01.000Z",
-          }),
-        });
-
-        const response2 = await counter.fetch("http://localhost/counter");
-        const response2Json = Schema.GetProjectCounterResponse.parse(
-          await response2.json()
-        );
-        expect(response2Json.amount).toBe(11);
-        expect(response2Json.orders).toHaveLength(1);
-        expect(response2Json.orders[0].name).toBe("John D.");
-        expect(response2Json.orders[0].amount).toBe(11);
-        expect(response2Json.orders[0].time).toBe("2023-01-01T01:01:01.000Z");
-      });
-      it("add an $11 contract and $32 contract", async () => {
-        const counter = Counter.fromName(env, "test");
-
-        await counter.fetch("http://localhost/contract/contractOne", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleOne@example.com",
-            amount: 11,
-            name: "John Doe",
-            time: "2023-01-03T01:01:01.000Z",
-          }),
-        });
-
-        await counter.fetch("http://localhost/contract/contractTwo", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleTwo@example.com",
-            amount: 32,
-            name: "James Smith",
-            time: "2023-01-04T02:02:02.000Z",
-          }),
-        });
-
-        const response3 = await counter.fetch("http://localhost/counter");
-        const response3Json = Schema.GetProjectCounterResponse.parse(
-          await response3.json()
-        );
-        expect(response3Json.amount).toBe(43);
-        expect(response3Json.orders).toHaveLength(2);
-        expect(response3Json.orders[0].name).toBe("John D.");
-        expect(response3Json.orders[0].amount).toBe(11);
-        expect(response3Json.orders[0].time).toBe("2023-01-03T01:01:01.000Z");
-        expect(response3Json.orders[1].name).toBe("James S.");
-        expect(response3Json.orders[1].amount).toBe(32);
-        expect(response3Json.orders[1].time).toBe("2023-01-04T02:02:02.000Z");
-      });
-      it("to be idempotent", async () => {
-        const counter = Counter.fromName(env, "test");
-
-        await counter.fetch("http://localhost/contract/contractOne", {
-          method: "PUT",
-          body: JSON.stringify({
-            email_address: "exampleOne@example.com",
-            amount: 11,
-            name: "John Doe",
-            time: "2023-01-04T02:02:02.000Z",
-          }),
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        // Updating the same contract shouldn't increase the count.
-        await counter.fetch("http://localhost/contract/contractOne", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleTwo@example.com",
-            amount: 11,
-            name: "John Doe",
-            time: "2023-01-04T02:02:02.000Z",
-          }),
-        });
-
-        const response3 = await counter.fetch("http://localhost/counter");
-        const response3Json = Schema.GetProjectCounterResponse.parse(
-          await response3.json()
-        );
-        expect(response3Json.amount).toBe(11);
-      });
-    });
-    describe("/refunds", () => {
-      beforeEach(async () => {
-        const counter = Counter.fromName(env, "test");
-        await counter.fetch("http://localhost/contract/contractOne", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleOne@example.com",
-            amount: 11,
-            captureId: "ABC0",
-            refunded: false,
-            name: "John Doe",
-            time: "2023-01-03T01:01:01.000Z",
-          }),
-        });
-
-        await counter.fetch("http://localhost/contract/contractTwo", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleTwo@example.com",
-            amount: 32,
-            captureId: "ABC1",
-            refunded: false,
-            name: "James Smith",
-            time: "2023-01-04T02:02:02.000Z",
-          }),
-        });
-      });
-      it("no refunds before deadline", async () => {
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch(
-          "http://localhost/refunds?projectId=test"
-        );
-        expect(response.status).toBe(404);
-      });
-      it("has list of refunds after deadline has passed", async () => {
-        const fundingDeadline = "2023-01-01T01:01:01Z";
-        await setProject({ ...defaultProject, fundingDeadline });
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch(
-          "http://localhost/refunds?projectId=test"
-        );
-        expect(response.ok).toBeTruthy();
-        const responseJson = await response.json<{ captureIds: string[] }>();
-        expect(responseJson.captureIds).toHaveLength(2);
-      });
-      it("can delete a refund", async () => {
-        await setProject({
-          ...defaultProject,
-          fundingDeadline: "2023-01-01T01:01:01Z",
-        });
-        const counter = Counter.fromName(env, "test");
-        const response = await counter.fetch(
-          "http://localhost/refunds?projectId=test"
-        );
-        expect(response.ok).toBeTruthy();
-        const responseJson = await response.json<{ captureIds: string[] }>();
-        expect(responseJson.captureIds).toHaveLength(2);
-        const captureId0 = responseJson.captureIds[0];
-        await counter.fetch(`http://localhost/refunds/${captureId0}`, {
-          method: "DELETE",
-        });
-        const response2 = await counter.fetch(
-          "http://localhost/refunds?projectId=test"
-        );
-        expect(response2.ok).toBeTruthy();
-        const response2Json = await response2.json<{ captureIds: string[] }>();
-        expect(response2Json.captureIds).toHaveLength(1);
-      });
-      it("no refund if deadline passed but project fully funded", async () => {
-        await setProject({
-          ...defaultProject,
-          fundingDeadline: "2023-01-01T01:01:01Z",
-          fundingGoal: "100",
-        });
-        const counter = Counter.fromName(env, "test");
-        await counter.fetch("http://localhost/contract/contractTwo", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email_address: "exampleThree@example.com",
-            amount: 100,
-            captureId: "ABC3",
-            refunded: false,
-            name: "James Fully Funder",
-            time: "2023-01-07T02:02:02.000Z",
-          }),
-        });
-        const response = await counter.fetch(
-          "http://localhost/refunds?projectId=test"
-        );
-        expect(response.status).toBe(404);
-      });
-    });
-    describe("fromName", () => {
-      it("throw error when no counter in env", () => {
-        expect(() => Counter.fromName({}, "test")).toThrow("COUNTER not bound");
-      });
+describe("Counter", () => {
+  describe("GET /counter", () => {
+    it("returns 0 when uninitialized", async () => {
+      const counter = Counter.fromName(env, "test");
+      const response = await counter.fetch("http://localhost/counter");
+      const responseJson = Schema.GetProjectCounterResponse.parse(
+        await response.json()
+      );
+      expect(responseJson.amount).toBe(0);
+      expect(responseJson.orders).toHaveLength(0);
     });
   });
+  describe("PUT /contract/:contract", () => {
+    it("add an $11 contract", async () => {
+      const counter = Counter.fromName(env, "test");
 
-  describe("fetch", () => {
-    const ctx = new ExecutionContext();
-    async function workerFetch(
-      method: string,
-      path: string,
-      other?: RequestInit
-    ) {
-      other = other ?? {};
-      return await worker.fetch(
-        new Request(`http://localhost${path}`, {
-          method,
-          ...other,
+      await counter.fetch("http://localhost/contract/contractOne", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          returnAddress: "email_address",
+          amount: 11,
+          name: "John Doe",
+          time: "2023-01-01T01:01:01.000Z",
+        }),
+      });
+
+      const response2 = await counter.fetch("http://localhost/counter");
+      const response2Json = Schema.GetProjectCounterResponse.parse(
+        await response2.json()
+      );
+      expect(response2Json.amount).toBe(11);
+      expect(response2Json.orders).toHaveLength(1);
+      expect(response2Json.orders[0].name).toBe("John D.");
+      expect(response2Json.orders[0].amount).toBe(11);
+      expect(response2Json.orders[0].time).toBe("2023-01-01T01:01:01.000Z");
+    });
+    it("add an $11 contract and $32 contract", async () => {
+      const counter = Counter.fromName(env, "test");
+
+      await counter.fetch("http://localhost/contract/contractOne", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleOne@example.com",
+          amount: 11,
+          name: "John Doe",
+          time: "2023-01-03T01:01:01.000Z",
+        }),
+      });
+
+      await counter.fetch("http://localhost/contract/contractTwo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleTwo@example.com",
+          amount: 32,
+          name: "James Smith",
+          time: "2023-01-04T02:02:02.000Z",
+        }),
+      });
+
+      const response3 = await counter.fetch("http://localhost/counter");
+      const response3Json = Schema.GetProjectCounterResponse.parse(
+        await response3.json()
+      );
+      expect(response3Json.amount).toBe(43);
+      expect(response3Json.orders).toHaveLength(2);
+      expect(response3Json.orders[0].name).toBe("John D.");
+      expect(response3Json.orders[0].amount).toBe(11);
+      expect(response3Json.orders[0].time).toBe("2023-01-03T01:01:01.000Z");
+      expect(response3Json.orders[1].name).toBe("James S.");
+      expect(response3Json.orders[1].amount).toBe(32);
+      expect(response3Json.orders[1].time).toBe("2023-01-04T02:02:02.000Z");
+    });
+    it("to be idempotent", async () => {
+      const counter = Counter.fromName(env, "test");
+
+      await counter.fetch("http://localhost/contract/contractOne", {
+        method: "PUT",
+        body: JSON.stringify({
+          email_address: "exampleOne@example.com",
+          amount: 11,
+          name: "John Doe",
+          time: "2023-01-04T02:02:02.000Z",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      // Updating the same contract shouldn't increase the count.
+      await counter.fetch("http://localhost/contract/contractOne", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleTwo@example.com",
+          amount: 11,
+          name: "John Doe",
+          time: "2023-01-04T02:02:02.000Z",
+        }),
+      });
+
+      const response3 = await counter.fetch("http://localhost/counter");
+      const response3Json = Schema.GetProjectCounterResponse.parse(
+        await response3.json()
+      );
+      expect(response3Json.amount).toBe(11);
+    });
+  });
+  describe("/refunds", () => {
+    beforeEach(async () => {
+      const counter = Counter.fromName(env, "test");
+      await counter.fetch("http://localhost/contract/contractOne", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleOne@example.com",
+          amount: 11,
+          captureId: "ABC0",
+          refunded: false,
+          name: "John Doe",
+          time: "2023-01-03T01:01:01.000Z",
+        }),
+      });
+
+      await counter.fetch("http://localhost/contract/contractTwo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleTwo@example.com",
+          amount: 32,
+          captureId: "ABC1",
+          refunded: false,
+          name: "James Smith",
+          time: "2023-01-04T02:02:02.000Z",
+        }),
+      });
+    });
+    it("no refunds before deadline", async () => {
+      const counter = Counter.fromName(env, "test");
+      const response = await counter.fetch(
+        "http://localhost/refunds?projectId=test"
+      );
+      expect(response.status).toBe(404);
+    });
+    it("has list of refunds after deadline has passed", async () => {
+      const fundingDeadline = "2023-01-01T01:01:01Z";
+      await setProject({ ...defaultProject, fundingDeadline });
+      const counter = Counter.fromName(env, "test");
+      const response = await counter.fetch(
+        "http://localhost/refunds?projectId=test"
+      );
+      expect(response.ok).toBeTruthy();
+      const responseJson = await response.json<{ captureIds: string[] }>();
+      expect(responseJson.captureIds).toHaveLength(2);
+    });
+    it("can delete a refund", async () => {
+      await setProject({
+        ...defaultProject,
+        fundingDeadline: "2023-01-01T01:01:01Z",
+      });
+      const counter = Counter.fromName(env, "test");
+      const response = await counter.fetch(
+        "http://localhost/refunds?projectId=test"
+      );
+      expect(response.ok).toBeTruthy();
+      const responseJson = await response.json<{ captureIds: string[] }>();
+      expect(responseJson.captureIds).toHaveLength(2);
+      const captureId0 = responseJson.captureIds[0];
+      await counter.fetch(`http://localhost/refunds/${captureId0}`, {
+        method: "DELETE",
+      });
+      const response2 = await counter.fetch(
+        "http://localhost/refunds?projectId=test"
+      );
+      expect(response2.ok).toBeTruthy();
+      const response2Json = await response2.json<{ captureIds: string[] }>();
+      expect(response2Json.captureIds).toHaveLength(1);
+    });
+    it("no refund if deadline passed but project fully funded", async () => {
+      await setProject({
+        ...defaultProject,
+        fundingDeadline: "2023-01-01T01:01:01Z",
+        fundingGoal: "100",
+      });
+      const counter = Counter.fromName(env, "test");
+      await counter.fetch("http://localhost/contract/contractTwo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email_address: "exampleThree@example.com",
+          amount: 100,
+          captureId: "ABC3",
+          refunded: false,
+          name: "James Fully Funder",
+          time: "2023-01-07T02:02:02.000Z",
+        }),
+      });
+      const response = await counter.fetch(
+        "http://localhost/refunds?projectId=test"
+      );
+      expect(response.status).toBe(404);
+    });
+  });
+  describe("fromName", () => {
+    it("throw error when no counter in env", () => {
+      expect(() => Counter.fromName({}, "test")).toThrow("COUNTER not bound");
+    });
+  });
+});
+
+describe("fetch", () => {
+  beforeEach(async () => {
+    await setProject(defaultProject);
+  });
+
+  it("respond with CORS headers when configured", async () => {
+    env.FRONTEND_URL = "http://localcors.com";
+    const response = await worker.fetch(
+      new Request("http://localhost/", {
+        method: "OPTIONS",
+        headers: {
+          Origin: env.FRONTEND_URL,
+        },
+      }),
+      env,
+      ctx
+    );
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBeTruthy();
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localcors.com"
+    );
+  });
+  it("respond without CORS headers when not configured", async () => {
+    env.FRONTEND_URL = undefined;
+    const response = await worker.fetch(
+      new Request("http://localhost/", { method: "OPTIONS" }),
+      env,
+      ctx
+    );
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBeFalsy();
+  });
+  describe("POST /contract", () => {
+    it("fails with incorrect body", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ notAmount: 1123.0 }),
         }),
         env,
         ctx
       );
-    }
-
-    it("respond with CORS headers when configured", async () => {
-      env.FRONTEND_URL = "http://localcors.com";
+      expect(response.ok).toBeFalsy();
+    });
+    it("fails with amount greater than 500", async () => {
       const response = await worker.fetch(
-        new Request("http://localhost/", {
-          method: "OPTIONS",
-          headers: {
-            Origin: env.FRONTEND_URL,
-          },
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 501 }),
         }),
         env,
         ctx
       );
-      expect(response.headers.has("Access-Control-Allow-Origin")).toBeTruthy();
-      expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
-        "http://localcors.com"
-      );
+      expect(response.ok).toBeFalsy();
     });
-    it("respond without CORS headers when not configured", async () => {
-      env.FRONTEND_URL = undefined;
+    it("fails with amount less than 5", async () => {
       const response = await worker.fetch(
-        new Request("http://localhost/", { method: "OPTIONS" }),
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 4 }),
+        }),
         env,
         ctx
       );
-      expect(response.headers.has("Access-Control-Allow-Origin")).toBeFalsy();
+      expect(response.ok).toBeFalsy();
     });
-    describe("POST /contract", () => {
-      it("fails with incorrect body", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ notAmount: 1123.0 }),
-          }),
-          env,
-          ctx
-        );
-        expect(response.ok).toBeFalsy();
+    it("fails when deadline has passed", async () => {
+      await setProject({
+        ...defaultProject,
+        fundingDeadline: "2023-01-01T00:00:00Z",
       });
-      it("fails with amount greater than 500", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 501 }),
-          }),
-          env,
-          ctx
-        );
-        expect(response.ok).toBeFalsy();
-      });
-      it("fails with amount less than 5", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 4 }),
-          }),
-          env,
-          ctx
-        );
-        expect(response.ok).toBeFalsy();
-      });
-      it("fails when deadline has passed", async () => {
-        await setProject({
-          ...defaultProject,
-          fundingDeadline: "2023-01-01T00:00:00Z",
-        });
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 10 }),
-          }),
-          env,
-          ctx
-        );
-        expect(response.ok).toBeFalsy();
-      });
-      it("works with correct body", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 17.0 }),
-          }),
-          env,
-          ctx
-        );
-        const responseBody: Paypal.CreateOrderResponse = await response.json();
-        expect(typeof responseBody.id).toBe("string");
-        expect(responseBody.id.length).toBeGreaterThan(1);
-      });
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 10 }),
+        }),
+        env,
+        ctx
+      );
+      expect(response.ok).toBeFalsy();
     });
-    describe("PATCH /contract/:contract_id", () => {
-      it("works", async () => {
-        const response = await worker.fetch(
-          new Request("http://localhost/projects/test/contract", {
-            method: "POST",
-            body: JSON.stringify({ amount: 17.0 }),
-          }),
-          env,
-          ctx
-        );
-        const responseBody: Paypal.CreateOrderResponse = await response.json();
-        const orderId = responseBody.id;
+    it("works with correct body", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 17.0 }),
+        }),
+        env,
+        ctx
+      );
+      const responseBody: Paypal.CreateOrderResponse = await response.json();
+      expect(typeof responseBody.id).toBe("string");
+      expect(responseBody.id.length).toBeGreaterThan(1);
+    });
+  });
+  describe("PATCH /contract/:contract_id", () => {
+    it("works", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 17.0 }),
+        }),
+        env,
+        ctx
+      );
+      const responseBody: Paypal.CreateOrderResponse = await response.json();
+      const orderId = responseBody.id;
 
-        const response2 = await worker.fetch(
-          new Request(`http://localhost/projects/test/contract/${orderId}`, {
-            method: "PATCH",
-          }),
-          env,
-          ctx
-        );
-        expect(response2.ok).toBeTruthy();
-      });
+      const response2 = await worker.fetch(
+        new Request(`http://localhost/projects/test/contract/${orderId}`, {
+          method: "PATCH",
+        }),
+        env,
+        ctx
+      );
+      expect(response2.ok).toBeTruthy();
     });
-    describe("GET /counter", () => {
-      it("starts at zero", async () => {
+  });
+  describe("GET /counter", () => {
+    it("starts at zero", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/counter", {
+          method: "GET",
+        }),
+        env,
+        ctx
+      );
+      const responseJson = Schema.GetProjectCounterResponse.parse(
+        await response.json()
+      );
+      expect(responseJson.amount).toBe(0);
+      expect(responseJson.orders).toHaveLength(0);
+    });
+    it("increases by 13 after you create a contract worth 13", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 15 }),
+        }),
+        env,
+        ctx
+      );
+      const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
+
+      await fetch(`${paypalMockUrl}/mock/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "testemail@example.com",
+          orderId: orderId,
+          givenName: "John",
+          surname: "Doe",
+        }),
+      });
+
+      await worker.fetch(
+        new Request(`http://localhost/projects/test/contract/${orderId}`, {
+          method: "PATCH",
+        }),
+        env,
+        ctx
+      );
+      const response3 = await worker.fetch(
+        new Request("http://localhost/projects/test/counter", {
+          method: "GET",
+        }),
+        env,
+        ctx
+      );
+      const response3Json = Schema.GetProjectCounterResponse.parse(
+        await response3.json()
+      );
+      expect(response3Json.amount).toBe(15);
+      expect(response3Json.orders).toHaveLength(1);
+      expect(response3Json.orders[0].name).toBe("John D.");
+      expect(response3Json.orders[0].amount).toBe(15);
+    });
+  });
+});
+
+describe("fetch Admin API", () => {
+  beforeEach(async () => {
+    await setProject(defaultProject);
+  });
+  describe("Failing when unauthenticated", () => {
+    it("POST /refund", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/refund", {
+          method: "POST",
+        }),
+        env,
+        ctx
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+    });
+    it("GET /bonuses", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/bonuses", {
+          method: "GET",
+        }),
+        env,
+        ctx
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+    });
+    it("DELETE /bonuses/whatever", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/bonuses/whatever", {
+          method: "DELETE",
+        }),
+        env,
+        ctx
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+    });
+    it("PUT /projects/:projectId", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test", {
+          method: "PUT",
+          body: JSON.stringify({ project: {} }),
+        }),
+        env,
+        ctx
+      );
+      expect(response.status).toBe(401);
+      // This is also google authenticated, so asking for basic
+      // authentication would be confusing.
+      expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    });
+    it("GET /projects/:projectId/successInvoice", async () => {
+      const response = await workerFetch(
+        "GET",
+        "/projects/test/successInvoice"
+      );
+      expect(response.status).toBe(401);
+      // This is also google authenticated, so asking for basic
+      // authentication would be confusing.
+      expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    });
+  });
+  describe("Authenticated", () => {
+    let headers = {};
+    beforeEach(() => {
+      env.ADMIN_PASSWORD = "correct horse battery staples";
+      const encodedUsernameAndPassword = Buffer.from(
+        "admin:correct horse battery staples"
+      ).toString("base64");
+      headers = { Authorization: `Basic ${encodedUsernameAndPassword}` };
+    });
+    describe("/refund", () => {
+      it("POST is initially 404", async () => {
         const response = await worker.fetch(
-          new Request("http://localhost/projects/test/counter", {
-            method: "GET",
+          new Request("http://localhost/projects/test/refund", {
+            method: "POST",
+            headers,
           }),
           env,
           ctx
         );
-        const responseJson = Schema.GetProjectCounterResponse.parse(
-          await response.json()
-        );
-        expect(responseJson.amount).toBe(0);
-        expect(responseJson.orders).toHaveLength(0);
+        expect(response.status).toBe(404);
       });
-      it("increases by 13 after you create a contract worth 13", async () => {
+      it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
         const response = await worker.fetch(
           new Request("http://localhost/projects/test/contract", {
             method: "POST",
@@ -863,569 +981,430 @@ describe("Paypal Authenticated API", () => {
           ctx
         );
         const response3 = await worker.fetch(
-          new Request("http://localhost/projects/test/counter", {
-            method: "GET",
+          new Request("http://localhost/projects/test/refund", {
+            method: "POST",
+            headers,
           }),
           env,
           ctx
         );
-        const response3Json = Schema.GetProjectCounterResponse.parse(
-          await response3.json()
+        expect(response3.status).toBe(404);
+        await setProject({
+          ...defaultProject,
+          fundingDeadline: "2023-01-01T01:01:01Z",
+        });
+        const response4 = await worker.fetch(
+          new Request("http://localhost/projects/test/refund", {
+            method: "POST",
+            headers,
+          }),
+          env,
+          ctx
         );
-        expect(response3Json.amount).toBe(15);
-        expect(response3Json.orders).toHaveLength(1);
-        expect(response3Json.orders[0].name).toBe("John D.");
-        expect(response3Json.orders[0].amount).toBe(15);
+        expect(response4.status).toBe(201);
+        const response4Json = await response4.json<{ refundId: string }>();
+        expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
+        const response5 = await worker.fetch(
+          new Request("http://localhost/projects/test/refund", {
+            method: "POST",
+            headers,
+          }),
+          env,
+          ctx
+        );
+        expect(response5.status).toBe(404);
       });
     });
-    describe("Admin API", () => {
-      describe("Failing when unauthenticated", () => {
-        it("POST /refund", async () => {
-          const response = await worker.fetch(
-            new Request("http://localhost/projects/test/refund", {
-              method: "POST",
-            }),
-            env,
-            ctx
-          );
-          expect(response.status).toBe(401);
-          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
-        });
-        it("GET /bonuses", async () => {
-          const response = await worker.fetch(
-            new Request("http://localhost/projects/test/bonuses", {
-              method: "GET",
-            }),
-            env,
-            ctx
-          );
-          expect(response.status).toBe(401);
-          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
-        });
-        it("DELETE /bonuses/whatever", async () => {
-          const response = await worker.fetch(
-            new Request("http://localhost/projects/test/bonuses/whatever", {
-              method: "DELETE",
-            }),
-            env,
-            ctx
-          );
-          expect(response.status).toBe(401);
-          expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
-        });
-        it("PUT /projects/:projectId", async () => {
-          const response = await worker.fetch(
-            new Request("http://localhost/projects/test", {
-              method: "PUT",
-              body: JSON.stringify({ project: {} }),
-            }),
-            env,
-            ctx
-          );
-          expect(response.status).toBe(401);
-          // This is also google authenticated, so asking for basic
-          // authentication would be confusing.
-          expect(response.headers.get("WWW-Authenticate")).toBeNull();
-        });
-        it("GET /projects/:projectId/successInvoice", async () => {
-          const response = await workerFetch(
-            "GET",
-            "/projects/test/successInvoice"
-          );
-          expect(response.status).toBe(401);
-          // This is also google authenticated, so asking for basic
-          // authentication would be confusing.
-          expect(response.headers.get("WWW-Authenticate")).toBeNull();
-        });
+    it("GET /bonuses", async () => {
+      const response = await worker.fetch(
+        new Request("http://localhost/projects/test/contract", {
+          method: "POST",
+          body: JSON.stringify({ amount: 15 }),
+        }),
+        env,
+        ctx
+      );
+      const orderId = (await response.json<Paypal.CreateOrderResponse>()).id;
+
+      await fetch(`${paypalMockUrl}/mock/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "testemail@example.com",
+          orderId: orderId,
+          givenName: "John",
+          surname: "Doe",
+        }),
       });
-      describe("Authenticated", () => {
-        let headers = {};
-        beforeEach(() => {
-          env.ADMIN_PASSWORD = "correct horse battery staples";
-          const encodedUsernameAndPassword = Buffer.from(
-            "admin:correct horse battery staples"
-          ).toString("base64");
-          headers = { Authorization: `Basic ${encodedUsernameAndPassword}` };
-        });
-        describe("/refund", () => {
-          it("POST is initially 404", async () => {
-            const response = await worker.fetch(
-              new Request("http://localhost/projects/test/refund", {
-                method: "POST",
-                headers,
-              }),
-              env,
-              ctx
-            );
-            expect(response.status).toBe(404);
-          });
-          it("POST is 404 until deadline passes then 404 again after all refunds complete", async () => {
-            const response = await worker.fetch(
-              new Request("http://localhost/projects/test/contract", {
-                method: "POST",
-                body: JSON.stringify({ amount: 15 }),
-              }),
-              env,
-              ctx
-            );
-            const orderId = (await response.json<Paypal.CreateOrderResponse>())
-              .id;
 
-            await fetch(`${paypalMockUrl}/mock/approve`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                email: "testemail@example.com",
-                orderId: orderId,
-                givenName: "John",
-                surname: "Doe",
-              }),
-            });
+      await worker.fetch(
+        new Request(`http://localhost/projects/test/contract/${orderId}`, {
+          method: "PATCH",
+        }),
+        env,
+        ctx
+      );
+      const response3 = await worker.fetch(
+        new Request("http://localhost/projects/test/bonuses", {
+          method: "GET",
+          headers,
+        }),
+        env,
+        ctx
+      );
+      expect(response3.status).toBe(404);
+      await setProject({
+        ...defaultProject,
+        fundingDeadline: "2023-01-01T01:01:01Z",
+      });
+      const response4 = await worker.fetch(
+        new Request("http://localhost/projects/test/bonuses", {
+          method: "GET",
+          headers,
+        }),
+        env,
+        ctx
+      );
+      expect(response4.status).toBe(200);
+      const response4Json = await response4.json<{
+        bonuses: Record<string, Schema.ProjectBonus>;
+      }>();
+      expect(Object.keys(response4Json.bonuses)).toHaveLength(1);
+      expect(response4Json.bonuses[orderId].amount).toBe(3);
+      expect(response4Json.bonuses[orderId].email).toBe(
+        "testemail@example.com"
+      );
 
-            await worker.fetch(
-              new Request(
-                `http://localhost/projects/test/contract/${orderId}`,
-                {
-                  method: "PATCH",
-                }
-              ),
-              env,
-              ctx
-            );
-            const response3 = await worker.fetch(
-              new Request("http://localhost/projects/test/refund", {
-                method: "POST",
-                headers,
-              }),
-              env,
-              ctx
-            );
-            expect(response3.status).toBe(404);
-            await setProject({
-              ...defaultProject,
-              fundingDeadline: "2023-01-01T01:01:01Z",
-            });
-            const response4 = await worker.fetch(
-              new Request("http://localhost/projects/test/refund", {
-                method: "POST",
-                headers,
-              }),
-              env,
-              ctx
-            );
-            expect(response4.status).toBe(201);
-            const response4Json = await response4.json<{ refundId: string }>();
-            expect(response4Json.refundId.length).toBeGreaterThanOrEqual(1);
-            const response5 = await worker.fetch(
-              new Request("http://localhost/projects/test/refund", {
-                method: "POST",
-                headers,
-              }),
-              env,
-              ctx
-            );
-            expect(response5.status).toBe(404);
-          });
-        });
-        it("GET /bonuses", async () => {
-          const response = await worker.fetch(
-            new Request("http://localhost/projects/test/contract", {
-              method: "POST",
-              body: JSON.stringify({ amount: 15 }),
-            }),
-            env,
-            ctx
-          );
-          const orderId = (await response.json<Paypal.CreateOrderResponse>())
-            .id;
-
-          await fetch(`${paypalMockUrl}/mock/approve`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+      const response5 = await worker.fetch(
+        new Request(`http://localhost/projects/test/bonuses/${orderId}`, {
+          method: "DELETE",
+          headers,
+        }),
+        env,
+        ctx
+      );
+      expect(response5.status).toBe(200);
+      const response6 = await worker.fetch(
+        new Request("http://localhost/projects/test/bonuses", {
+          method: "GET",
+          headers,
+        }),
+        env,
+        ctx
+      );
+      expect(response6.status).toBe(404);
+    });
+    describe("PUT /projects/:projectId", () => {
+      it("persists project data", async () => {
+        const response = await worker.fetch(
+          new Request("http://localhost/projects/myproject", {
+            method: "PUT",
+            headers,
             body: JSON.stringify({
-              email: "testemail@example.com",
-              orderId: orderId,
-              givenName: "John",
-              surname: "Doe",
-            }),
-          });
-
-          await worker.fetch(
-            new Request(`http://localhost/projects/test/contract/${orderId}`, {
-              method: "PATCH",
-            }),
-            env,
-            ctx
-          );
-          const response3 = await worker.fetch(
-            new Request("http://localhost/projects/test/bonuses", {
-              method: "GET",
-              headers,
-            }),
-            env,
-            ctx
-          );
-          expect(response3.status).toBe(404);
-          await setProject({
-            ...defaultProject,
-            fundingDeadline: "2023-01-01T01:01:01Z",
-          });
-          const response4 = await worker.fetch(
-            new Request("http://localhost/projects/test/bonuses", {
-              method: "GET",
-              headers,
-            }),
-            env,
-            ctx
-          );
-          expect(response4.status).toBe(200);
-          const response4Json = await response4.json<{
-            bonuses: Record<string, Schema.ProjectBonus>;
-          }>();
-          expect(Object.keys(response4Json.bonuses)).toHaveLength(1);
-          expect(response4Json.bonuses[orderId].amount).toBe(3);
-          expect(response4Json.bonuses[orderId].email).toBe(
-            "testemail@example.com"
-          );
-
-          const response5 = await worker.fetch(
-            new Request(`http://localhost/projects/test/bonuses/${orderId}`, {
-              method: "DELETE",
-              headers,
-            }),
-            env,
-            ctx
-          );
-          expect(response5.status).toBe(200);
-          const response6 = await worker.fetch(
-            new Request("http://localhost/projects/test/bonuses", {
-              method: "GET",
-              headers,
-            }),
-            env,
-            ctx
-          );
-          expect(response6.status).toBe(404);
-        });
-        describe("PUT /projects/:projectId", () => {
-          it("persists project data", async () => {
-            const response = await worker.fetch(
-              new Request("http://localhost/projects/myproject", {
-                method: "PUT",
-                headers,
-                body: JSON.stringify({
-                  project: {
-                    fundingGoal: "200",
-                    fundingDeadline: "2023-01-01T12:01:01.000Z",
-                    refundBonusPercent: 5,
-                    defaultPaymentAmount: 10,
-                    formHeading: "Test Form Heading",
-                    description: "<b>be bold</b>",
-                    authorName: "Test Person",
-                    authorImageUrl: "http://localhost/image.jpgl",
-                    authorDescription: "Not a <i>real</i> person.",
-                    isDraft: false,
-                  },
-                }),
-              }),
-              env,
-              ctx
-            );
-            expect(response.status).toBe(200);
-            const response2 = await worker.fetch(
-              new Request("http://localhost/projects/myproject", {
-                method: "GET",
-              }),
-              env,
-              ctx
-            );
-            expect(response2.status).toBe(200);
-            const jsonBody = await response2.json<{
-              project: Schema.Project;
-            }>();
-            expect(jsonBody.project.fundingGoal).toBe("200");
-            expect(jsonBody.project.fundingDeadline).toBe(
-              "2023-01-01T12:01:01.000Z"
-            );
-            expect(jsonBody.project.refundBonusPercent).toBe(5);
-            expect(jsonBody.project.defaultPaymentAmount).toBe(10);
-            expect(jsonBody.project.formHeading).toBe("Test Form Heading");
-            expect(jsonBody.project.description).toBe("<b>be bold</b>");
-            expect(jsonBody.project.authorName).toBe("Test Person");
-            expect(jsonBody.project.authorImageUrl).toBe(
-              "http://localhost/image.jpgl"
-            );
-            expect(jsonBody.project.authorDescription).toBe(
-              "Not a <i>real</i> person."
-            );
-            expect(jsonBody.project.isDraft).toBe(false);
-          });
-          it("user with just edit permission can edit draft", async () => {
-            try {
-              setMockUser("test@gmail.com");
-              const response1 = await workerFetch("POST", "/acls/grants", {
-                headers,
-                body: JSON.stringify({
-                  grant: {
-                    user: "test@gmail.com",
-                    resource: "/projects/myproject",
-                    permissions: ["edit"],
-                  },
-                }),
-              });
-              console.log(response1);
-
-              const response = await worker.fetch(
-                new Request("http://localhost/projects/myproject", {
-                  method: "PUT",
-                  body: JSON.stringify({
-                    project: {
-                      fundingGoal: "200",
-                      fundingDeadline: "2023-01-01T12:01:01.000Z",
-                      refundBonusPercent: 5,
-                      defaultPaymentAmount: 10,
-                      formHeading: "Test Form Heading",
-                      description: "<b>be bold</b>",
-                      authorName: "Test Person",
-                      authorImageUrl: "http://localhost/image.jpgl",
-                      authorDescription: "Not a <i>real</i> person.",
-                      isDraft: true,
-                    },
-                  }),
-                }),
-                env,
-                ctx
-              );
-              expect(response.status).toBe(200);
-              const response2 = await worker.fetch(
-                new Request("http://localhost/projects/myproject", {
-                  method: "GET",
-                }),
-                env,
-                ctx
-              );
-              expect(response2.status).toBe(200);
-              const jsonBody = await response2.json<{
-                project: Schema.Project;
-              }>();
-              expect(jsonBody.project.fundingGoal).toBe("200");
-              expect(jsonBody.project.fundingDeadline).toBe(
-                "2023-01-01T12:01:01.000Z"
-              );
-              expect(jsonBody.project.refundBonusPercent).toBe(5);
-              expect(jsonBody.project.defaultPaymentAmount).toBe(10);
-              expect(jsonBody.project.formHeading).toBe("Test Form Heading");
-              expect(jsonBody.project.description).toBe("<b>be bold</b>");
-              expect(jsonBody.project.authorName).toBe("Test Person");
-              expect(jsonBody.project.authorImageUrl).toBe(
-                "http://localhost/image.jpgl"
-              );
-              expect(jsonBody.project.authorDescription).toBe(
-                "Not a <i>real</i> person."
-              );
-              expect(jsonBody.project.isDraft).toBe(true);
-            } finally {
-              setMockUser(null);
-            }
-          });
-          it("user with just edit permission can't publish", async () => {
-            try {
-              setMockUser("test@gmail.com");
-              await workerFetch("POST", "/acls/grants", {
-                headers,
-                body: JSON.stringify({
-                  grant: {
-                    user: "test@gmail.com",
-                    resource: "/projects/myproject",
-                    permissions: ["edit"],
-                  },
-                }),
-              });
-
-              const response = await worker.fetch(
-                new Request("http://localhost/projects/myproject", {
-                  method: "PUT",
-                  body: JSON.stringify({
-                    project: {
-                      fundingGoal: "200",
-                      fundingDeadline: "2023-01-01T12:01:01.000Z",
-                      refundBonusPercent: 5,
-                      defaultPaymentAmount: 10,
-                      formHeading: "Test Form Heading",
-                      description: "<b>be bold</b>",
-                      authorName: "Test Person",
-                      authorImageUrl: "http://localhost/image.jpgl",
-                      authorDescription: "Not a <i>real</i> person.",
-                      isDraft: false,
-                    },
-                  }),
-                }),
-                env,
-                ctx
-              );
-              expect(response.status).toBe(403);
-            } finally {
-              setMockUser(null);
-            }
-          });
-          it("can't change certain parameters after published", async () => {
-            const project = {
-              fundingGoal: "200",
-              fundingDeadline: "2023-01-01T12:01:01.000Z",
-              refundBonusPercent: 5,
-              defaultPaymentAmount: 10,
-              formHeading: "Test Form Heading",
-              description: "<b>be bold</b>",
-              authorName: "Test Person",
-              authorImageUrl: "http://localhost/image.jpgl",
-              authorDescription: "Not a <i>real</i> person.",
-              isDraft: false,
-            };
-            const response = await workerFetch("PUT", "/projects/myproject", {
-              headers,
-              body: JSON.stringify({ project }),
-            });
-            expect(response.status).toBe(200);
-            const response2 = await workerFetch("PUT", "/projects/myproject", {
-              headers,
-              body: JSON.stringify({
-                project: { ...project, fundingGoal: "300" },
-              }),
-            });
-            expect(response2.status).toBe(403);
-            const response3 = await workerFetch("PUT", "/projects/myproject", {
-              headers,
-              body: JSON.stringify({
-                project: {
-                  ...project,
-                  fundingDeadline: "2024-01-01T12:01:01.000Z",
-                },
-              }),
-            });
-            expect(response3.status).toBe(403);
-            const response4 = await workerFetch("PUT", "/projects/myproject", {
-              headers,
-              body: JSON.stringify({
-                project: { ...project, refundBonusPercent: 10 },
-              }),
-            });
-            expect(response4.status).toBe(403);
-          });
-        });
-        describe("GET /projects/:projectId", () => {
-          it("refundBonusPercent defaults to 20, defaultPaymentAmount to 89 and isDraft to false", async () => {
-            if (env.PROJECTS == null) throw Error("PROJECTS undefined");
-            await env.PROJECTS.put(
-              "myproject",
-              JSON.stringify({
+              project: {
                 fundingGoal: "200",
                 fundingDeadline: "2023-01-01T12:01:01.000Z",
+                refundBonusPercent: 5,
+                defaultPaymentAmount: 10,
                 formHeading: "Test Form Heading",
                 description: "<b>be bold</b>",
                 authorName: "Test Person",
                 authorImageUrl: "http://localhost/image.jpgl",
                 authorDescription: "Not a <i>real</i> person.",
-              })
-            );
-            const response = await worker.fetch(
-              new Request("http://localhost/projects/myproject", {
-                method: "GET",
-              }),
-              env,
-              ctx
-            );
-            expect(response.status).toBe(200);
-            const jsonBody = await response.json<{ project: Schema.Project }>();
-            expect(jsonBody.project.fundingGoal).toBe("200");
-            expect(jsonBody.project.fundingDeadline).toBe(
-              "2023-01-01T12:01:01.000Z"
-            );
-            expect(jsonBody.project.formHeading).toBe("Test Form Heading");
-            expect(jsonBody.project.description).toBe("<b>be bold</b>");
-            expect(jsonBody.project.refundBonusPercent).toBe(20);
-            expect(jsonBody.project.defaultPaymentAmount).toBe(89);
-            expect(jsonBody.project.authorName).toBe("Test Person");
-            expect(jsonBody.project.authorImageUrl).toBe(
-              "http://localhost/image.jpgl"
-            );
-            expect(jsonBody.project.authorDescription).toBe(
-              "Not a <i>real</i> person."
-            );
-            expect(jsonBody.project.isDraft).toBe(false);
-          });
-        });
-        describe("GET /projects/:projectId/successInvoice", () => {
-          async function fund(amount: number) {
-            const response = await workerFetch(
-              "POST",
-              "/projects/test/contract",
-              {
-                body: JSON.stringify({ amount }),
-              }
-            );
-            const orderId = Paypal.CreateOrderResponse.parse(
-              await response.json()
-            ).id;
-
-            await fetch(`${paypalMockUrl}/mock/approve`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
+                isDraft: false,
               },
+            }),
+          }),
+          env,
+          ctx
+        );
+        expect(response.status).toBe(200);
+        const response2 = await worker.fetch(
+          new Request("http://localhost/projects/myproject", {
+            method: "GET",
+          }),
+          env,
+          ctx
+        );
+        expect(response2.status).toBe(200);
+        const jsonBody = await response2.json<{
+          project: Schema.Project;
+        }>();
+        expect(jsonBody.project.fundingGoal).toBe("200");
+        expect(jsonBody.project.fundingDeadline).toBe(
+          "2023-01-01T12:01:01.000Z"
+        );
+        expect(jsonBody.project.refundBonusPercent).toBe(5);
+        expect(jsonBody.project.defaultPaymentAmount).toBe(10);
+        expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+        expect(jsonBody.project.description).toBe("<b>be bold</b>");
+        expect(jsonBody.project.authorName).toBe("Test Person");
+        expect(jsonBody.project.authorImageUrl).toBe(
+          "http://localhost/image.jpgl"
+        );
+        expect(jsonBody.project.authorDescription).toBe(
+          "Not a <i>real</i> person."
+        );
+        expect(jsonBody.project.isDraft).toBe(false);
+      });
+      it("user with just edit permission can edit draft", async () => {
+        try {
+          setMockUser("test@gmail.com");
+          const response1 = await workerFetch("POST", "/acls/grants", {
+            headers,
+            body: JSON.stringify({
+              grant: {
+                user: "test@gmail.com",
+                resource: "/projects/myproject",
+                permissions: ["edit"],
+              },
+            }),
+          });
+          console.log(response1);
+
+          const response = await worker.fetch(
+            new Request("http://localhost/projects/myproject", {
+              method: "PUT",
               body: JSON.stringify({
-                email: "testemail@example.com",
-                orderId: orderId,
-                givenName: "John",
-                surname: "Doe",
+                project: {
+                  fundingGoal: "200",
+                  fundingDeadline: "2023-01-01T12:01:01.000Z",
+                  refundBonusPercent: 5,
+                  defaultPaymentAmount: 10,
+                  formHeading: "Test Form Heading",
+                  description: "<b>be bold</b>",
+                  authorName: "Test Person",
+                  authorImageUrl: "http://localhost/image.jpgl",
+                  authorDescription: "Not a <i>real</i> person.",
+                  isDraft: true,
+                },
               }),
-            });
-
-            await workerFetch("PATCH", `/projects/test/contract/${orderId}`);
-          }
-          it("returns 404 when not funded fully", async () => {
-            await fund(15);
-            await setProject({
-              ...defaultProject,
-              fundingGoal: "200",
-              fundingDeadline: "2023-01-01T10:10:10Z",
-            });
-
-            const response3 = await workerFetch(
-              "GET",
-              "/projects/test/successInvoice",
-              {
-                headers,
-              }
-            );
-            expect(response3.status).toBe(404);
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(200);
+          const response2 = await worker.fetch(
+            new Request("http://localhost/projects/myproject", {
+              method: "GET",
+            }),
+            env,
+            ctx
+          );
+          expect(response2.status).toBe(200);
+          const jsonBody = await response2.json<{
+            project: Schema.Project;
+          }>();
+          expect(jsonBody.project.fundingGoal).toBe("200");
+          expect(jsonBody.project.fundingDeadline).toBe(
+            "2023-01-01T12:01:01.000Z"
+          );
+          expect(jsonBody.project.refundBonusPercent).toBe(5);
+          expect(jsonBody.project.defaultPaymentAmount).toBe(10);
+          expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+          expect(jsonBody.project.description).toBe("<b>be bold</b>");
+          expect(jsonBody.project.authorName).toBe("Test Person");
+          expect(jsonBody.project.authorImageUrl).toBe(
+            "http://localhost/image.jpgl"
+          );
+          expect(jsonBody.project.authorDescription).toBe(
+            "Not a <i>real</i> person."
+          );
+          expect(jsonBody.project.isDraft).toBe(true);
+        } finally {
+          setMockUser(null);
+        }
+      });
+      it("user with just edit permission can't publish", async () => {
+        try {
+          setMockUser("test@gmail.com");
+          await workerFetch("POST", "/acls/grants", {
+            headers,
+            body: JSON.stringify({
+              grant: {
+                user: "test@gmail.com",
+                resource: "/projects/myproject",
+                permissions: ["edit"],
+              },
+            }),
           });
-          it("returns successInvoice when fully funded", async () => {
-            await fund(300);
-            await setProject({
-              ...defaultProject,
-              fundingDeadline: "2023-01-01T10:10:10Z",
-            });
-            const response3 = await workerFetch(
-              "GET",
-              "/projects/test/successInvoice",
-              {
-                headers,
-              }
-            );
-            expect(response3.status).toBe(200);
-            const responseBody = Schema.GetProjectSuccessInvoiceResponse.parse(
-              await response3.json()
-            );
-            expect(responseBody.successInvoice).toHaveLength(1);
-            expect(responseBody.successInvoice[0].name).toBe("John Doe");
-            expect(responseBody.successInvoice[0].amount).toBe(300);
-            expect(responseBody.successInvoice[0].paypalFee).toBe(12.3);
-          });
+
+          const response = await worker.fetch(
+            new Request("http://localhost/projects/myproject", {
+              method: "PUT",
+              body: JSON.stringify({
+                project: {
+                  fundingGoal: "200",
+                  fundingDeadline: "2023-01-01T12:01:01.000Z",
+                  refundBonusPercent: 5,
+                  defaultPaymentAmount: 10,
+                  formHeading: "Test Form Heading",
+                  description: "<b>be bold</b>",
+                  authorName: "Test Person",
+                  authorImageUrl: "http://localhost/image.jpgl",
+                  authorDescription: "Not a <i>real</i> person.",
+                  isDraft: false,
+                },
+              }),
+            }),
+            env,
+            ctx
+          );
+          expect(response.status).toBe(403);
+        } finally {
+          setMockUser(null);
+        }
+      });
+      it("can't change certain parameters after published", async () => {
+        const project = {
+          fundingGoal: "200",
+          fundingDeadline: "2023-01-01T12:01:01.000Z",
+          refundBonusPercent: 5,
+          defaultPaymentAmount: 10,
+          formHeading: "Test Form Heading",
+          description: "<b>be bold</b>",
+          authorName: "Test Person",
+          authorImageUrl: "http://localhost/image.jpgl",
+          authorDescription: "Not a <i>real</i> person.",
+          isDraft: false,
+        };
+        const response = await workerFetch("PUT", "/projects/myproject", {
+          headers,
+          body: JSON.stringify({ project }),
         });
+        expect(response.status).toBe(200);
+        const response2 = await workerFetch("PUT", "/projects/myproject", {
+          headers,
+          body: JSON.stringify({
+            project: { ...project, fundingGoal: "300" },
+          }),
+        });
+        expect(response2.status).toBe(403);
+        const response3 = await workerFetch("PUT", "/projects/myproject", {
+          headers,
+          body: JSON.stringify({
+            project: {
+              ...project,
+              fundingDeadline: "2024-01-01T12:01:01.000Z",
+            },
+          }),
+        });
+        expect(response3.status).toBe(403);
+        const response4 = await workerFetch("PUT", "/projects/myproject", {
+          headers,
+          body: JSON.stringify({
+            project: { ...project, refundBonusPercent: 10 },
+          }),
+        });
+        expect(response4.status).toBe(403);
+      });
+    });
+    describe("GET /projects/:projectId", () => {
+      it("refundBonusPercent defaults to 20, defaultPaymentAmount to 89 and isDraft to false", async () => {
+        if (env.PROJECTS == null) throw Error("PROJECTS undefined");
+        await env.PROJECTS.put(
+          "myproject",
+          JSON.stringify({
+            fundingGoal: "200",
+            fundingDeadline: "2023-01-01T12:01:01.000Z",
+            formHeading: "Test Form Heading",
+            description: "<b>be bold</b>",
+            authorName: "Test Person",
+            authorImageUrl: "http://localhost/image.jpgl",
+            authorDescription: "Not a <i>real</i> person.",
+          })
+        );
+        const response = await worker.fetch(
+          new Request("http://localhost/projects/myproject", {
+            method: "GET",
+          }),
+          env,
+          ctx
+        );
+        expect(response.status).toBe(200);
+        const jsonBody = await response.json<{ project: Schema.Project }>();
+        expect(jsonBody.project.fundingGoal).toBe("200");
+        expect(jsonBody.project.fundingDeadline).toBe(
+          "2023-01-01T12:01:01.000Z"
+        );
+        expect(jsonBody.project.formHeading).toBe("Test Form Heading");
+        expect(jsonBody.project.description).toBe("<b>be bold</b>");
+        expect(jsonBody.project.refundBonusPercent).toBe(20);
+        expect(jsonBody.project.defaultPaymentAmount).toBe(89);
+        expect(jsonBody.project.authorName).toBe("Test Person");
+        expect(jsonBody.project.authorImageUrl).toBe(
+          "http://localhost/image.jpgl"
+        );
+        expect(jsonBody.project.authorDescription).toBe(
+          "Not a <i>real</i> person."
+        );
+        expect(jsonBody.project.isDraft).toBe(false);
+      });
+    });
+    describe("GET /projects/:projectId/successInvoice", () => {
+      async function fund(amount: number) {
+        const response = await workerFetch("POST", "/projects/test/contract", {
+          body: JSON.stringify({ amount }),
+        });
+        const orderId = Paypal.CreateOrderResponse.parse(
+          await response.json()
+        ).id;
+
+        await fetch(`${paypalMockUrl}/mock/approve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "testemail@example.com",
+            orderId: orderId,
+            givenName: "John",
+            surname: "Doe",
+          }),
+        });
+
+        await workerFetch("PATCH", `/projects/test/contract/${orderId}`);
+      }
+      it("returns 404 when not funded fully", async () => {
+        await fund(15);
+        await setProject({
+          ...defaultProject,
+          fundingGoal: "200",
+          fundingDeadline: "2023-01-01T10:10:10Z",
+        });
+
+        const response3 = await workerFetch(
+          "GET",
+          "/projects/test/successInvoice",
+          {
+            headers,
+          }
+        );
+        expect(response3.status).toBe(404);
+      });
+      it("returns successInvoice when fully funded", async () => {
+        await fund(300);
+        await setProject({
+          ...defaultProject,
+          fundingDeadline: "2023-01-01T10:10:10Z",
+        });
+        const response3 = await workerFetch(
+          "GET",
+          "/projects/test/successInvoice",
+          {
+            headers,
+          }
+        );
+        expect(response3.status).toBe(200);
+        const responseBody = Schema.GetProjectSuccessInvoiceResponse.parse(
+          await response3.json()
+        );
+        expect(responseBody.successInvoice).toHaveLength(1);
+        expect(responseBody.successInvoice[0].name).toBe("John Doe");
+        expect(responseBody.successInvoice[0].amount).toBe(300);
+        expect(responseBody.successInvoice[0].paypalFee).toBe(12.3);
       });
     });
   });
