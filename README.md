@@ -103,32 +103,34 @@ wrong.
 
 ### Project fully funded
 
-1. Configure the project in /admin
-2. Fund the project to completion.
-3. The /refund route should return 404.
-4. Wait until deadline passed.
+1. Login as in /adminLogin
+2. Configure the project in /edit
+3. Approve the project in /admin
+4. Fund the project to completion.
 5. The /refund route should return 404.
-6. No more funds are accepted.
-7. Navigate to /successInvoice. The invoice should be displayed.
-8. Navigate to /admin
-9. Type "admin" as username and <ADMIN_PASSWORD> as password.
-10. There should be no bonuses to pay out.
+6. Wait until deadline passed.
+7. The /refund route should return 404.
+8. No more funds are accepted.
+9. Navigate to /successInvoice. The invoice should be displayed.
+10. Navigate to /admin
+11. There should be no bonuses to pay out.
 
 ### Project not fully funded.
 
-1. Configure the project in /admin
-2. Don't fully fund the project.
-3. The /refund route should return 404.
-4. Wait until the deadline passed.
-5. The /refund route should refund a funder until all funders have been
+1. Login as in /adminLogin
+2. Configure the project in /edit
+3. Approve the project in /admin
+4. Don't fully fund the project.
+5. The /refund route should return 404.
+6. Wait until the deadline passed.
+7. The /refund route should refund a funder until all funders have been
    refunded.
-6. No more funds are accepted.
-7. Navigate to /successInvoice. You should get a 404.
-8. Navigate to /admin
-9. Type "admin" as username and <ADMIN_PASSWORD> as password.
-10. There should be a list of bonuses that need to be payed out.
-11. Log-in to paypal and payout the bonuses manually marking them off as you go.
-12. Refresh the /admin page. THe marked off payments should not be visable.
+8. No more funds are accepted.
+9. Navigate to /successInvoice. You should get a 404.
+10. Navigate to /admin
+11. There should be a list of bonuses that need to be payed out.
+12. Log-in to paypal and payout the bonuses manually marking them off as you go.
+13. Refresh the /admin page. THe marked off payments should not be visable.
 
 ### Let people use a draft project
 
