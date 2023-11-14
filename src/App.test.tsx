@@ -112,6 +112,11 @@ const server = setupServer(
     project = (await req.json<{ project: Schema.Project }>()).project;
     return res(ctx.status(200));
   }),
+  rest.get(WORKER_URL + "/projects", (_req, res, ctx) => {
+    const projects: Record<string, Schema.GetProjectsProject> = {};
+    if (project.isDraft == false) projects["test"] = project;
+    return res(ctx.json({ projects, cursor: null }));
+  }),
   rest.get(WORKER_URL + "/acls/grants", (_req, res, ctx) => {
     return res(
       ctx.json({
@@ -200,6 +205,10 @@ function MockEditApp() {
   return <MockAppAtRoute route="/projects/test/edit" />;
 }
 
+function MockProjects() {
+  return <MockAppAtRoute route="/projects" />;
+}
+
 type MockAppAtRouteProps = { route: string } & MockAppProps;
 
 function MockAppAtRoute({ route, headerParenthesis }: MockAppAtRouteProps) {
@@ -218,16 +227,14 @@ function MockAppAtRoute({ route, headerParenthesis }: MockAppAtRouteProps) {
   );
 }
 
-test("RedirectToDemo", async () => {
+test("RedirectToProjects", async () => {
   const router = ReactRouterDom.createMemoryRouter(
     routes({ PaypalButtons: MockPaypalButtons }),
     { initialEntries: ["/"] }
   );
   render(<ReactRouterDom.RouterProvider router={router} />);
   await waitFor(() => {
-    expect(router.state.location.pathname).toBe(
-      "/projects/dac2023w35production"
-    );
+    expect(router.state.location.pathname).toBe("/projects");
   });
 });
 
@@ -576,4 +583,14 @@ test("PublishProject is disabled if project is already published", async () => {
   await waitFor(() => {
     expect(screen.getByRole("button")).toHaveAttribute("disabled");
   });
+});
+
+test("Projects Works", async () => {
+  project.isDraft = false;
+  project.formHeading = "Test Project 1 Okay";
+  project.fundingGoal = "326";
+
+  render(<MockProjects />);
+  expect(await screen.findByText(/Test Project 1 Okay/i)).toBeInTheDocument();
+  expect(await screen.findByText(/326/i)).toBeInTheDocument();
 });

@@ -106,15 +106,15 @@ function TopLevel(props: TopLevelProps) {
             headerParenthesis ? ` (${headerParenthesis})` : ""
           }`}</h1>
         </header>
-        {outlet == null ? <RedirectToDemo /> : outlet}
+        {outlet == null ? <RedirectToProjects /> : outlet}
       </CredentialsContext.Provider>
     </SetCredentialsContext.Provider>
   );
 }
 
-function RedirectToDemo() {
+function RedirectToProjects() {
   const navigate = ReactRouterDom.useNavigate();
-  const toUrl = "/projects/dac2023w35production";
+  const toUrl = "/projects";
   // prevent infinite loop
   const [triedToNavigate, setTriedToNavigate] = React.useState(false);
 
@@ -155,6 +155,11 @@ export function routes({
           element: <AdminLogin />,
         },
         {
+          path: "/projects",
+          loader: projectsLoader,
+          element: <Projects />,
+        },
+        {
           path: "/projects/:projectId",
           loader: projectLoader,
           element: <App PaypalButtons={PaypalButtons} />,
@@ -176,6 +181,82 @@ export function routes({
       ],
     },
   ];
+}
+
+async function projectsLoader({ request: _r, params: _p }: LoaderFunctionArgs) {
+  const response = await fetch(`${WORKER_URL}/projects`);
+  if (response.ok) {
+    return Schema.GetProjectsResponse.parse(await response.json());
+  } else {
+    throw new Error(`${response.status} when fetching /projects`);
+  }
+}
+
+function Projects() {
+  const { projects } = Schema.GetProjectsResponse.parse(
+    ReactRouterDom.useLoaderData()
+  );
+  const [progress, setProgress] = React.useState<Record<string, number>>({});
+  React.useEffect(() => {
+    Object.keys(projects).map(async (projectId) => {
+      const response = await fetch(
+        `${WORKER_URL}/projects/${projectId}/counter`
+      );
+      if (!response.ok) {
+        throw Error(`${response.status} while fetching counter`);
+      }
+      const responseJson = Schema.GetProjectCounterResponse.parse(
+        await response.json()
+      );
+      setProgress((progress) => ({
+        ...progress,
+        [projectId]: responseJson.amount,
+      }));
+    });
+  }, []);
+  const sortedProjects = (() => {
+    const p = Object.entries(projects);
+    p.sort(([_aId, a], [_bId, b]) =>
+      a.fundingDeadline < b.fundingDeadline ? 1 : -1
+    );
+    return p;
+  })();
+
+  const ProjectLink = (
+    props: React.PropsWithChildren<{ projectId: string }>
+  ) => (
+    <ReactRouterDom.Link to={props.projectId} relative="path">
+      {props.children}
+    </ReactRouterDom.Link>
+  );
+  return (
+    <>
+      <h2> Projects </h2>
+      {sortedProjects.map(([projectId, project]) => (
+        <div key={projectId} className="project">
+          <ProjectLink projectId={projectId}>
+            <img
+              className="portrait"
+              src={project.authorImageUrl}
+              height="128"
+              width="128"
+            />
+          </ProjectLink>
+          <ProjectLink projectId={projectId}>
+            {" "}
+            <h3>{project.formHeading}</h3>
+          </ProjectLink>
+          <div className="author">By {project.authorName}</div>
+          <FundingTimer deadline={project.fundingDeadline} />
+          <FundingProgressBar
+            goal={Number(project.fundingGoal)}
+            funded={false}
+            progress={progress[projectId] ?? -1}
+          />
+        </div>
+      ))}
+    </>
+  );
 }
 
 type ProjectLoader = { project?: Schema.Project; error?: string };
@@ -352,7 +433,7 @@ function App(props: AppProps) {
           <div id="contact">
             <h2> {project.authorName} </h2>
             <img
-              id="portrait"
+              className="portrait"
               src={project.authorImageUrl}
               width="128"
               height="128"
@@ -408,10 +489,10 @@ export function FundingTimer(props: FundingTimerProps) {
     return <span>Loading deadline...</span>;
   } else if (hasFundingDeadlinePassed(deadline)) {
     return (
-      <span>
+      <p>
         Funding closed on {formatTime(deadline)}. No more funds are being
         accepted.
-      </span>
+      </p>
     );
   } else {
     // Something is going weird with the modules in this pacakge which causes

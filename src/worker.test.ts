@@ -863,6 +863,60 @@ describe("fetch", () => {
       expect(response3Json.orders[0].amount).toBe(15);
     });
   });
+  describe("GET /projects", () => {
+    it("returns only published projects", async () => {
+      if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
+      await setProject({
+        ...defaultProject,
+        formHeading: "Project 1",
+        isDraft: false,
+      });
+      await env.PROJECTS.put(
+        "project2",
+        JSON.stringify({
+          ...defaultProject,
+          formHeading: "Project 2",
+          isDraft: true,
+        })
+      );
+      const response = await workerFetch("GET", "/projects");
+      expect(response.ok).toBe(true);
+      const responseBody = Schema.GetProjectsResponse.parse(
+        await response.json<unknown>()
+      );
+      expect(Object.entries(responseBody.projects)).toHaveLength(1);
+      expect(responseBody.cursor).toBeNull();
+      const project = responseBody.projects["test"];
+      expect(project.formHeading).toBe("Project 1");
+    });
+    it("returns multiple published projects", async () => {
+      if (typeof env.PROJECTS == "undefined") throw Error("PROJECTS undefined");
+      await setProject({
+        ...defaultProject,
+        formHeading: "Project 1",
+        isDraft: false,
+      });
+      await env.PROJECTS.put(
+        "project2",
+        JSON.stringify({
+          ...defaultProject,
+          formHeading: "Project 2",
+          isDraft: false,
+        })
+      );
+      const response = await workerFetch("GET", "/projects");
+      expect(response.ok).toBe(true);
+      const responseBody = Schema.GetProjectsResponse.parse(
+        await response.json<unknown>()
+      );
+      expect(Object.entries(responseBody.projects)).toHaveLength(2);
+      expect(responseBody.cursor).toBeNull();
+      const project = responseBody.projects["test"];
+      expect(project.formHeading).toBe("Project 1");
+      const project2 = responseBody.projects["project2"];
+      expect(project2.formHeading).toBe("Project 2");
+    });
+  });
 });
 
 describe("fetch Admin API", () => {

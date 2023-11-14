@@ -309,6 +309,50 @@ export default {
       return {};
     });
 
+    router.get("/projects", async (_req) => {
+      if (typeof env.PROJECTS == "undefined")
+        throw Error("KV PROJECTS not bound");
+      const listResult = await env.PROJECTS.list();
+
+      function filterNull<T>(
+        xs: Array<[string, T | null]>
+      ): Array<[string, T]> {
+        const ys: Array<[string, T]> = [];
+        for (const x of xs) {
+          const xv = x[1];
+          if (xv != null) ys.push([x[0], xv]);
+        }
+        return ys;
+      }
+
+      const response: Schema.GetProjectsResponse = {
+        projects: Object.fromEntries(
+          filterNull(
+            await Promise.all(
+              listResult.keys.map(async (key) => [
+                key.name,
+                await getProject(env, key.name),
+              ])
+            )
+          )
+            .filter(([_projectId, project]) => !project.isDraft)
+            .map(([projectId, project]) => [
+              projectId,
+              {
+                fundingDeadline: project.fundingDeadline,
+                fundingGoal: project.fundingGoal,
+                refundBonusPercent: project.refundBonusPercent,
+                formHeading: project.formHeading,
+                authorName: project.authorName,
+                authorImageUrl: project.authorImageUrl,
+              },
+            ])
+        ),
+        cursor: listResult.list_complete ? null : listResult.cursor,
+      };
+      return response;
+    });
+
     router.get("/projects/:projectId/successInvoice", withUser, async (req) => {
       if (typeof req.user != "string") return Itty.error(401);
       const { projectId } = req.params;

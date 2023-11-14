@@ -42,7 +42,7 @@ form {
   margin-top: 0;
 }
 
-#contact #portrait {
+#contact .portrait {
   margin: 0 auto;
   display: block;
   border-radius: 50%;
@@ -59,4 +59,31 @@ form {
   margin: 0 0 1em 0;
   border-radius: 12px;
   font-size: small;
+}
+
+.project {
+  border: 1px solid var(--border);
+  padding: 0px 24px;
+  margin: 24px 0;
+}
+
+.project .funding-countdown {
+  text-align: left;
+  font-size: 1.1em;
+}
+
+.project .portrait {
+  margin: 24px auto 12px auto;
+  display: block;
+  border-radius: 50%;
+  float: none;
+}
+
+@media (min-width: 640px) {
+  .project .portrait {
+    float: left;
+    margin-right: 24px;
+    margin-bottom: 16px;
+    border-radius: 0%;
+  }
 }

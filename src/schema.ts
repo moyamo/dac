@@ -45,6 +45,22 @@ export const PutProjectBody = z.object({
 });
 export type PutProjectBody = z.infer<typeof PutProjectBody>;
 
+export const GetProjectsProject = Project.pick({
+  fundingDeadline: true,
+  fundingGoal: true,
+  refundBonusPercent: true,
+  formHeading: true,
+  authorName: true,
+  authorImageUrl: true,
+});
+export type GetProjectsProject = z.infer<typeof GetProjectsProject>;
+
+export const GetProjectsResponse = z.object({
+  projects: z.record(GetProjectsProject),
+  cursor: z.string().nullable(),
+});
+export type GetProjectsResponse = z.infer<typeof GetProjectsResponse>;
+
 export const ProjectBonus = z.object({
   email: z.string(),
   amount: z.number(),
