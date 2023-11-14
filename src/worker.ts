@@ -558,6 +558,11 @@ export class Counter implements DurableObject {
         );
         await this.state.storage.put("orderMap", newOrderMap);
         await this.state.storage.put("version", 1);
+        console.info(
+          `Upgrade Durable Object Counter from v0 to v1: ${
+            this.state.id.name ?? "null"
+          } (${this.state.id.toString()}) finished successfully.`
+        );
       }
     });
   }
@@ -829,8 +834,15 @@ export async function getCapture(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  const data = Paypal.GetCaptureResponse.parse(await response.json());
-  return data;
+  const responseJson = await response.json();
+  try {
+    const data = Paypal.GetCaptureResponse.parse(responseJson);
+    return data;
+  } catch (e) {
+    console.error(e);
+    console.error(responseJson);
+    throw e;
+  }
 }
 
 function trace<T>(b: T): T {
