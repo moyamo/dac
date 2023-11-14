@@ -102,9 +102,11 @@ function TopLevel(props: TopLevelProps) {
     <SetCredentialsContext.Provider value={setCredentials}>
       <CredentialsContext.Provider value={credentials}>
         <header>
-          <h1>{`EnsureDone ${
-            headerParenthesis ? ` (${headerParenthesis})` : ""
-          }`}</h1>
+          <ReactRouterDom.Link to={"/"}>
+            <h1>{`EnsureDone ${
+              headerParenthesis ? ` (${headerParenthesis})` : ""
+            }`}</h1>
+          </ReactRouterDom.Link>
         </header>
         {outlet == null ? <RedirectToProjects /> : outlet}
       </CredentialsContext.Provider>
