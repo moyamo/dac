@@ -594,3 +594,9 @@ test("Projects Works", async () => {
   expect(await screen.findByText(/Test Project 1 Okay/i)).toBeInTheDocument();
   expect(await screen.findByText(/326/i)).toBeInTheDocument();
 });
+
+test("About Page Works", async () => {
+  render(<MockAppAtRoute route="/about" />);
+  expect(await screen.findByText(/Kickstarters fail/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Tabarrok/i)).toBeInTheDocument();
+});

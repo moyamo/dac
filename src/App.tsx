@@ -180,6 +180,7 @@ export function routes({
           loader: successInvoiceLoader,
           element: <SuccessInvoiceApp />,
         },
+        { path: "/about", element: <About /> },
       ],
     },
   ];
@@ -318,6 +319,31 @@ function App(props: AppProps) {
     })();
   }, [funded]);
 
+  type ExplanationProps = { amount: number; refundBonusPercent: number };
+  const Explanation = (props: ExplanationProps) => {
+    const { amount, refundBonusPercent } = props;
+    const refundBonus = (amount * refundBonusPercent) / 100;
+    const totalRefund = amount + refundBonus;
+    return (
+      <>
+        <p>Thanks for pledging ${amount.toFixed(2)}!</p>
+        <ul>
+          <li>
+            If the goal is <em>not</em> reached you will get a full refund ($
+            {amount.toFixed(2)}) plus an additional ${refundBonus.toFixed(2)} as
+            a thank you for supporting this project. Your total potential refund
+            is <strong>${totalRefund.toFixed(2)}</strong>.{" "}
+            <ReactRouterDom.Link to="/about">Why?</ReactRouterDom.Link>
+          </li>
+          <li>
+            If the goal <em>is</em> reached. The money will be used to fund the
+            project!
+          </li>
+        </ul>
+      </>
+    );
+  };
+
   return (
     <>
       {typeof project == "undefined" ? (
@@ -410,23 +436,21 @@ function App(props: AppProps) {
                     }
                   }}
                 />
-                <p>
-                  {getInvalidAmountError(Number(amountRef.current)) || (
-                    <>
-                      {`Thanks for pledging $${Number(
-                        amountRef.current
-                      )}! If we do not reach our goal you will get a`}{" "}
-                      <strong>
-                        {`$${(
-                          (Number(amountRef.current) *
-                            (100.0 + project.refundBonusPercent)) /
-                          100.0
-                        ).toFixed(2)}`}
-                      </strong>
-                      {` refund!`}
-                    </>
-                  )}
-                </p>
+                {(() => {
+                  const invalidAmountError = getInvalidAmountError(
+                    Number(amountRef.current)
+                  );
+                  if (invalidAmountError) {
+                    return <p>{invalidAmountError}</p>;
+                  } else {
+                    return (
+                      <Explanation
+                        amount={Number(amountRef.current)}
+                        refundBonusPercent={project.refundBonusPercent}
+                      />
+                    );
+                  }
+                })()}
               </>
             )}
             <FundingTimer deadline={project.fundingDeadline} />
@@ -562,6 +586,72 @@ export function formatTime(isoTimeString: string): string {
     `${pad(time.getHours())}:${pad(time.getMinutes())}`
   );
   // return time.toISOString().replace("T", " ").slice(0, "0000-00-00 00:00".length);
+}
+
+function About() {
+  return (
+    <>
+      <h2>About</h2>
+
+      <p>
+        <a href="https://www.kickstarter.com/help/stats">
+          60% of Kickstarters fail
+        </a>
+        {". "}
+        That is very bad odds.{" "}
+        <a href="https://mason.gmu.edu/~atabarro/BetterCrowdfunding.pdf">
+          Research done in a lab shows that offering a <em>refund bonus</em>{" "}
+          reduces failure rate from 60% to 40%.
+        </a>
+      </p>
+      <p>
+        <a href="https://www.kickstarter.com/help/stats">
+          79% of projects that raised more than 20% of their goal were
+          successfully funded
+        </a>
+        . The refund bonus provides incentives that gets twice as many projects
+        over the line. Particularly:
+      </p>
+      <ul>
+        <li>
+          If the project <b>is not on track</b> to reaching {"it's"} goal,
+          speculators will pledge in order to claim the refund bonus.
+        </li>
+        <li>
+          If the project <b>is on track</b> to reaching {"it's"} goal, prosocial
+          people are likely to pledge so that the project gets funded.
+        </li>
+        <li>
+          If the project <b>is close to reaching {"it's"} goal</b>, but time is
+          running out. Potential{" "}
+          <a href="https://en.wikipedia.org/wiki/Free-rider_problem">
+            free-riders
+          </a>{" "}
+          will wait until the very last moment, but eventually concede and
+          pledge their money.
+        </li>
+      </ul>
+
+      <p>
+        Here is a recent talk by Tabarrok on the subject, hosted by the
+        Foresight Institute.
+      </p>
+      <iframe
+        style={{ width: "100%", height: "100%", aspectRatio: "16 / 9" }}
+        src="https://www.youtube.com/embed/Cjxl11sAbN0?si=8WfIyvBueA4nwPRq"
+        title="YouTube video player"
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      ></iframe>
+      <p>
+        For a longer explanation on why we should use refund bonuses see{" "}
+        <a href="https://www.lesswrong.com/posts/CwgHX9tbfASqxjpsc/the-economics-of-the-asteroid-deflection-problem-dominant">
+          this post on lesswrong by Yaseen Mowzer
+        </a>
+      </p>
+    </>
+  );
 }
 
 async function adminFetch(method: string, path: string, init?: RequestInit) {
