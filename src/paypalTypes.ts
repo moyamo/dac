@@ -79,7 +79,7 @@ export const CapturePaymentResponse = z.object({
             amount: AmountWithCurrency,
             links: z.array(Link),
             seller_protection: z.object({
-              dispute_categories: z.array(z.string()),
+              dispute_categories: z.array(z.string()).optional(),
               status: z.string(),
             }),
             seller_receivable_breakdown: z.object({
@@ -112,7 +112,7 @@ export const GetCaptureResponse = z.object({
     merchant_id: z.string(),
   }),
   seller_protection: z.object({
-    dispute_categories: z.array(z.string()),
+    dispute_categories: z.array(z.string()).optional(),
     status: z.string(),
   }),
   seller_receivable_breakdown: z.object({
