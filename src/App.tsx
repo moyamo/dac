@@ -77,6 +77,11 @@ async function authFetch(method: string, path: string, init?: RequestInit) {
     if (responseJson?.code == "ERR_JWT_EXPIRED") {
       return "logout";
     }
+    // I think this can happen with a JWT that was signed by a JWT whose key was
+    // rotated.
+    if (responseJson?.error == "No key found") {
+      return "logout";
+    }
   }
   return response;
 }
