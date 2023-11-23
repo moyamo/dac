@@ -15,6 +15,9 @@ export const HEADER_PARENTHESIS =
 
 export const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
+export const PROJECT_APPLICATION_FORM =
+  process.env.REACT_APP_PROJECT_APPLICATION_FORM || "";
+
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
@@ -23,6 +26,7 @@ const router = createBrowserRouter(
   MyApp.routes({
     PaypalButtons: PayPalButtons,
     headerParenthesis: HEADER_PARENTHESIS,
+    projectApplicationForm: PROJECT_APPLICATION_FORM,
   })
 );
 

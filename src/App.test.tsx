@@ -14,6 +14,7 @@ import {
   FundingTimer,
   routes,
   PublishProject,
+  RoutesArgs,
 } from "./App";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
@@ -189,9 +190,7 @@ function MockPaypalButtons(props: PayPalButtonsComponentProps) {
   );
 }
 
-type MockAppProps = {
-  headerParenthesis?: string;
-};
+type MockAppProps = Omit<RoutesArgs, "PaypalButtons">;
 
 function MockApp(props: MockAppProps) {
   return <MockAppAtRoute route="/projects/test" {...props} />;
@@ -205,19 +204,19 @@ function MockEditApp() {
   return <MockAppAtRoute route="/projects/test/edit" />;
 }
 
-function MockProjects() {
-  return <MockAppAtRoute route="/projects" />;
+function MockProjects(props: MockAppProps) {
+  return <MockAppAtRoute route="/projects" {...props} />;
 }
 
 type MockAppAtRouteProps = { route: string } & MockAppProps;
 
-function MockAppAtRoute({ route, headerParenthesis }: MockAppAtRouteProps) {
+function MockAppAtRoute({ route, ...props }: MockAppAtRouteProps) {
   return (
     <ReactRouterDom.RouterProvider
       router={ReactRouterDom.createMemoryRouter(
         routes({
           PaypalButtons: MockPaypalButtons,
-          headerParenthesis: headerParenthesis,
+          ...props,
         }),
         {
           initialEntries: [route],
@@ -593,6 +592,26 @@ test("Projects Works", async () => {
   render(<MockProjects />);
   expect(await screen.findByText(/Test Project 1 Okay/i)).toBeInTheDocument();
   expect(await screen.findByText(/326/i)).toBeInTheDocument();
+});
+
+test("Projects does not show the application form link", async () => {
+  render(<MockProjects projectApplicationForm="" />);
+  await waitFor(() => {
+    expect(
+      screen.queryByText(/Apply to have your project featured on EnsureDone/i)
+    ).not.toBeInTheDocument();
+  });
+});
+
+test("Projects shows application form link", async () => {
+  render(
+    <MockProjects projectApplicationForm="http://localhost/application" />
+  );
+  expect(
+    await screen.findByText(
+      /Apply to have your project featured on EnsureDone/i
+    )
+  ).toHaveAttribute("href", "http://localhost/application");
 });
 
 test("About Page Works", async () => {

@@ -46,6 +46,8 @@ time, you need to set the environment variables
   from production. e.g. `REACT_APP_HEADER_PARENTHESIS="test site"` will render
   in the header "EnsureDone (test site)", `REACT_APP_HEADER_PARENTHESIS=""`
   renders as "EnsureDone".
+- `REACT_APP_PROJECT_APPLICATION_FORM` (optional) specify a link that people can
+  use to apply to have the project hosted on the site.
 
 ### Cloudflare Workers
 

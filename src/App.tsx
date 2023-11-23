@@ -142,11 +142,13 @@ function RedirectToProjects() {
 export type RoutesArgs = {
   PaypalButtons: React.FunctionComponent<PayPalButtonsComponentProps>;
   headerParenthesis?: string;
+  projectApplicationForm?: string;
 };
 
 export function routes({
   PaypalButtons,
   headerParenthesis,
+  projectApplicationForm,
 }: RoutesArgs): ReactRouterDom.RouteObject[] {
   return [
     {
@@ -164,7 +166,7 @@ export function routes({
         {
           path: "/projects",
           loader: projectsLoader,
-          element: <Projects />,
+          element: <Projects projectApplicationForm={projectApplicationForm} />,
         },
         {
           path: "/projects/:projectId",
@@ -200,10 +202,15 @@ async function projectsLoader({ request: _r, params: _p }: LoaderFunctionArgs) {
   }
 }
 
-function Projects() {
+type ProjectsProps = {
+  projectApplicationForm?: string;
+};
+
+function Projects(props: ProjectsProps) {
   const { projects } = Schema.GetProjectsResponse.parse(
     ReactRouterDom.useLoaderData()
   );
+  const { projectApplicationForm } = props;
   const [progress, setProgress] = React.useState<Record<string, number>>({});
   React.useEffect(() => {
     Object.keys(projects).map(async (projectId) => {
@@ -239,6 +246,16 @@ function Projects() {
   );
   return (
     <>
+      {projectApplicationForm ? (
+        <p>
+          <small>
+            <a href={projectApplicationForm}>
+              Apply to have your project featured on EnsureDone!
+            </a>
+          </small>
+        </p>
+      ) : null}
+
       <h2> Projects </h2>
       {sortedProjects.map(([projectId, project]) => (
         <div key={projectId} className="project">
