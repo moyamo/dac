@@ -8,6 +8,7 @@ import type {
 } from "@paypal/paypal-js/types/components/buttons";
 import React from "react";
 import * as ReactRouterDom from "react-router-dom";
+import { Helmet } from "react-helmet";
 import type { LoaderFunctionArgs } from "react-router";
 import Countdown from "react-countdown";
 import DOMPurify from "dompurify";
@@ -106,6 +107,9 @@ function TopLevel(props: TopLevelProps) {
   return (
     <SetCredentialsContext.Provider value={setCredentials}>
       <CredentialsContext.Provider value={credentials}>
+        <Helmet>
+          <title> EnsureDone </title>
+        </Helmet>
         <header>
           <ReactRouterDom.Link to={"/"}>
             <h1>{`EnsureDone ${
@@ -372,6 +376,9 @@ function App(props: AppProps) {
         <div className="error"> {loaderError} </div>
       ) : (
         <>
+          <Helmet>
+            <title> {project.formHeading} - EnsureDone </title>
+          </Helmet>
           <form>
             <h2>{project.formHeading}</h2>
             <FundingProgressBar
