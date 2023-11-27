@@ -345,27 +345,36 @@ function App(props: AppProps) {
     })();
   }, [funded]);
 
-  type ExplanationProps = { amount: number; refundBonusPercent: number };
+  type ExplanationProps = {
+    amount: number;
+    refundBonusPercent: number;
+    progress: number;
+    fundingGoal: number;
+  };
   const Explanation = (props: ExplanationProps) => {
-    const { amount, refundBonusPercent } = props;
+    const { amount, refundBonusPercent, progress, fundingGoal } = props;
     const refundBonus = (amount * refundBonusPercent) / 100;
     const totalRefund = amount + refundBonus;
     return (
       <>
         <p>Thanks for pledging ${amount.toFixed(2)}!</p>
-        <ul>
-          <li>
-            If the goal is <em>not</em> reached you will get a full refund ($
-            {amount.toFixed(2)}) plus an additional ${refundBonus.toFixed(2)} as
-            a thank you for supporting this project. Your total potential refund
-            is <strong>${totalRefund.toFixed(2)}</strong>.{" "}
-            <ReactRouterDom.Link to="/about">Why?</ReactRouterDom.Link>
-          </li>
-          <li>
-            If the goal <em>is</em> reached. The money will be used to fund the
-            project!
-          </li>
-        </ul>
+        {progress == -1 || progress < fundingGoal ? (
+          <ul>
+            <li>
+              If the goal is <em>not</em> reached you will get a full refund ($
+              {amount.toFixed(2)}) plus an additional ${refundBonus.toFixed(2)}{" "}
+              as a thank you for supporting this project. Your total potential
+              refund is <strong>${totalRefund.toFixed(2)}</strong>.{" "}
+              <ReactRouterDom.Link to="/about">Why?</ReactRouterDom.Link>
+            </li>
+            <li>
+              If the goal <em>is</em> reached. The money will be used to fund
+              the project!
+            </li>
+          </ul>
+        ) : (
+          <p>The project has reached the funding goal!</p>
+        )}
       </>
     );
   };
@@ -476,6 +485,8 @@ function App(props: AppProps) {
                       <Explanation
                         amount={Number(amountRef.current)}
                         refundBonusPercent={project.refundBonusPercent}
+                        progress={progress}
+                        fundingGoal={Number(project.fundingGoal)}
                       />
                     );
                   }

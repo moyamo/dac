@@ -273,7 +273,16 @@ test("refundBonus displayed", async () => {
   project.refundBonusPercent = 12;
   project.defaultPaymentAmount = 13;
   render(<MockApp />);
-  expect(await screen.findByText(/\$14.56/i));
+  expect(await screen.findByText(/\$14.56/i)).toBeInTheDocument();
+});
+
+test("refundBonus not displayed when funding goal has been reached", () => {
+  project.refundBonusPercent = 12;
+  project.defaultPaymentAmount = 13;
+  project.fundingGoal = "100";
+  counter = 100;
+  render(<MockApp />);
+  expect(screen.queryByText(/\$14.56/i)).not.toBeInTheDocument();
 });
 
 test("Less $5 dollar not accepted", async () => {
