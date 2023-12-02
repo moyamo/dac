@@ -368,6 +368,28 @@ export default {
       return response;
     });
 
+    router.get(
+      "/projects/:projectId/returnAddresses.csv",
+      withAdmin,
+      async (req) => {
+        const { projectId } = req.params;
+        const url = new URL(req.url);
+        const obj = Counter.fromName(env, projectId);
+        const response = await obj.fetch(`${url.origin}/returnAddresses`);
+        const responseJson = await response.json<GetReturnAddressesResponse>();
+
+        let csv = "Email,Name";
+        for (const row of responseJson.returnAddresses) {
+          csv += `\n${row.returnAddress},${row.name}`;
+        }
+        return Itty.text(csv, {
+          headers: {
+            "Content-Disposition": `attachment; filename=${projectId}-return-addresses.csv`,
+          },
+        });
+      }
+    );
+
     router.post("/projects/:projectId/refund", withAdmin, async (req) => {
       const projectId: string = req.params.projectId;
       const obj = Counter.fromName(env, projectId);
@@ -499,6 +521,13 @@ type PutContractBody = {
   name: string;
   refundBonusPercent: number;
   time: string;
+};
+
+type GetReturnAddressesResponse = {
+  returnAddresses: Array<{
+    returnAddress: string;
+    name: string;
+  }>;
 };
 
 // Durable Object
@@ -665,6 +694,19 @@ export class Counter implements DurableObject {
         paypalFee: o.paypalFee,
       }));
       const response = { successInvoice, authorName: project.authorName };
+      return response;
+    });
+
+    router.get("/returnAddresses", async () => {
+      const orderMap: OrderMap =
+        (await this.state.storage.get("orderMap")) || {};
+
+      const response: GetReturnAddressesResponse = {
+        returnAddresses: Object.values(orderMap).map((o) => ({
+          returnAddress: o.returnAddress,
+          name: o.name,
+        })),
+      };
       return response;
     });
 
