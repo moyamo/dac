@@ -90,3 +90,19 @@ form {
     border-radius: 0%;
   }
 }
+
+.project .refund-bonus {
+  color: var(--text-bright);
+  font-weight: bold;
+  font-size: small;
+  text-align: center;
+  border: 3px dotted var(--border);
+}
+
+@media (min-width: 640px) {
+  .project .refund-bonus {
+    float: right;
+    margin-top: 0;
+    max-width: 17ex;
+  }
+}

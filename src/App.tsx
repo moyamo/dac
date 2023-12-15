@@ -261,29 +261,38 @@ function Projects(props: ProjectsProps) {
       ) : null}
 
       <h2> Projects </h2>
-      {sortedProjects.map(([projectId, project]) => (
-        <div key={projectId} className="project">
-          <ProjectLink projectId={projectId}>
-            <img
-              className="portrait"
-              src={project.authorImageUrl}
-              height="128"
-              width="128"
+      {sortedProjects.map(([projectId, project]) => {
+        const projectFundingGoal = Number(project.fundingGoal);
+        return (
+          <div key={projectId} className="project">
+            <ProjectLink projectId={projectId}>
+              <img
+                className="portrait"
+                src={project.authorImageUrl}
+                height="128"
+                width="128"
+              />
+            </ProjectLink>
+            <ProjectLink projectId={projectId}>
+              {" "}
+              <h3>{project.formHeading}</h3>
+            </ProjectLink>
+            <div className="author">By {project.authorName}</div>
+            {(progress[projectId] ?? projectFundingGoal) >=
+              projectFundingGoal ||
+            hasFundingDeadlinePassed(project.fundingDeadline) ? null : (
+              <p className="refund-bonus">{`Eligible for a ${project.refundBonusPercent}% Refund Bonus`}</p>
+            )}
+
+            <FundingTimer deadline={project.fundingDeadline} />
+            <FundingProgressBar
+              goal={projectFundingGoal}
+              funded={false}
+              progress={progress[projectId] ?? -1}
             />
-          </ProjectLink>
-          <ProjectLink projectId={projectId}>
-            {" "}
-            <h3>{project.formHeading}</h3>
-          </ProjectLink>
-          <div className="author">By {project.authorName}</div>
-          <FundingTimer deadline={project.fundingDeadline} />
-          <FundingProgressBar
-            goal={Number(project.fundingGoal)}
-            funded={false}
-            progress={progress[projectId] ?? -1}
-          />
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </>
   );
 }

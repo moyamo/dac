@@ -623,6 +623,45 @@ test("Projects shows application form link", async () => {
   ).toHaveAttribute("href", "http://localhost/application");
 });
 
+test("Projects displays refund bonus percent", async () => {
+  project.isDraft = false;
+  project.refundBonusPercent = 59;
+
+  render(<MockProjects />);
+  expect(await screen.findByText(/59/i)).toBeInTheDocument();
+});
+
+test("Projects doesn't display refund bonus percent when funded", async () => {
+  project.isDraft = false;
+  project.refundBonusPercent = 59;
+  project.fundingGoal = "747";
+  counter = 747;
+
+  render(<MockProjects />);
+  await waitFor(() => {
+    // Check that component has rendered.
+    expect(screen.queryByText(/747/i)).toBeInTheDocument();
+    // Test that refundBonusPercent is not shown
+    expect(screen.queryByText(/59/i)).not.toBeInTheDocument();
+  });
+});
+
+test("Projects doesn't display refund bonus percent when funding deadline passed", async () => {
+  project.isDraft = false;
+  project.refundBonusPercent = 59;
+  project.fundingGoal = "747";
+  project.fundingDeadline = "2023-01-01T00:00:00Z";
+  counter = 0;
+
+  render(<MockProjects />);
+  await waitFor(() => {
+    // Check that component has rendered.
+    expect(screen.queryByText(/747/i)).toBeInTheDocument();
+    // Test that refundBonusPercent is not shown
+    expect(screen.queryByText(/59/i)).not.toBeInTheDocument();
+  });
+});
+
 test("About Page Works", async () => {
   render(<MockAppAtRoute route="/about" />);
   expect(await screen.findByText(/Kickstarters fail/i)).toBeInTheDocument();
